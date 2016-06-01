@@ -20,12 +20,8 @@ int main(){
       return 1;
    }
    bytesPerPixel = 4;
-   pixels = calloc(PIXEL_WIDTH * PIXEL_HEIGHT * bytesPerPixel, 1);
-
-   pthread_t thread_id;
-   if(pthread_create(&thread_id , NULL, handle_clients , NULL) < 0){
-      perror("could not create thread");
-      free(pixels);
+   
+   if (!server_start()){
       SDL_Quit();
       return 1;
    }
@@ -53,14 +49,8 @@ int main(){
       }
    }
 
-   running = 0;
-   printf("Shutting Down...\n");
+   server_stop();
    SDL_DestroyWindow(window);
-   while (client_thread_count)
-      usleep(100000);
-   close(server_sock);
-   pthread_join(thread_id, NULL);
-   free(pixels);
    SDL_Quit();
    return 0;
 }

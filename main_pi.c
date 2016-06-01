@@ -207,8 +207,7 @@ int main(int argc, char *argv[])
 	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	
 	bytesPerPixel = 3;
-	pixels = calloc(PIXEL_WIDTH * PIXEL_HEIGHT * bytesPerPixel, 1);
-	
+
 	// load program
 	GLuint programObject = LoadProgram(vertex_shader, fragment_shader);
 	glUseProgram(programObject);
@@ -220,13 +219,8 @@ int main(int argc, char *argv[])
 	glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 0, quad_texcoord);
 	glEnableVertexAttribArray(1);
 
-	pthread_t thread_id;
-	if(pthread_create(&thread_id , NULL, handle_clients , NULL) < 0)
-	{
-		perror("could not create thread");
-		free(pixels);
+	if (!server_start())
 		return 1;
-	}
 	
 	while(!kbhit())
 	{
@@ -235,12 +229,6 @@ int main(int argc, char *argv[])
 		eglSwapBuffers(display, surface);
 	}
 
-	running = 0;
-	printf("Shutting Down...\n");
-	while (client_thread_count)
-		usleep(100000);
-	close(server_sock);
-	pthread_join(thread_id, NULL);
-	free(pixels);
+	server_stop();
 	return 0;
 }
