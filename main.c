@@ -19,26 +19,21 @@ volatile int server_sock;
 void * handle_client(void *);
 void * handle_clients(void *);
 
-void set_pixel(uint16_t x, uint16_t y, uint32_t c, uint8_t a)
+void set_pixel(uint16_t x, uint16_t y, uint8_t r, uint8_t g, uint8_t b, uint8_t a)
 {
    if(x < PIXEL_WIDTH && y < PIXEL_HEIGHT){
+      uint8_t *pixel = ((uint8_t*)pixels) + (y * PIXEL_WIDTH + x) * 4; // BGRA
       if(a == 255){ // fast & usual path
-         pixels[y * PIXEL_WIDTH + x] = 0xff000000 | c; // ARGB
-         return;
+         pixel[2] = r;
+         pixel[1] = g;
+         pixel[0] = b;
       }
-      // alpha path
-      uint8_t src_r = (c >> 16);
-      uint8_t src_g = (c >> 8) & 0xff;
-      uint8_t src_b = (c & 0xff);
-      uint32_t dst_c = pixels[y * PIXEL_WIDTH + x];
-      uint8_t dst_r = (dst_c >> 16);
-      uint8_t dst_g = (dst_c >> 8) & 0xff;
-      uint8_t dst_b = (dst_c & 0xff);
-      uint8_t na = 255 - a;
-      uint16_t r = src_r * a + dst_r * na;
-      uint16_t g = src_g * a + dst_g * na;
-      uint16_t b = src_b * a + dst_b * na;
-      pixels[y * PIXEL_WIDTH + x] = 0xff000000 | ((r & 0xff00) << 8) | (g & 0xff00) | (b >> 8); // ARGB
+      else{
+         float alpha = a / 255.0f, nalpha = 1.0f - alpha;
+         pixel[2] = (uint8_t)(r * alpha + pixel[2] * nalpha);
+         pixel[1] = (uint8_t)(g * alpha + pixel[1] * nalpha);
+         pixel[0] = (uint8_t)(b * alpha + pixel[0] * nalpha);
+      }
    }
 }
 
@@ -56,8 +51,7 @@ void * handle_client(void *s){
          for (int i = 0; i < read_pos; i++){
             if (buf[i] == '\n'){
                buf[i] = 0;
-#if 1 // mit alpha, aber ggf. instabil
-               if(!strncmp(buf, "PX ", 3)){ // ...frag nicht :D...
+               if(!strncmp(buf, "PX ", 3)){ // ...don't ask :D...
                   char *pos1 = buf + 3;
                   x = strtoul(buf + 3, &pos1, 10);
                   if(buf != pos1){
@@ -69,27 +63,56 @@ void * handle_client(void *s){
                         pos1 = pos2;
                         c = strtoul(pos2, &pos1, 16);
                         if(pos2 != pos1){
-                           uint8_t a = 255;
-                           if((pos1 - pos2) > 6){ // contains alpha
-                              a = c & 0xff;
-                              c >>= 8;
+                           uint8_t r, g, b, a;
+                           int codelen = pos1 - pos2;
+                           if(codelen > 6){ // rgba
+                              r = c >> 24;
+                              g = c >> 16;
+                              b = c >> 8;
+                              a = c;
                            }
-                           set_pixel(x,y,c,a);
+                           else if(codelen > 2){ // rgb
+                              r = c >> 16;
+                              g = c >> 8;
+                              b = c;
+                              a = 255;
+                           }
+                           else{ // gray
+                              r = c;
+                              g = c;
+                              b = c;
+                              a = 255;
+                           }
+                           set_pixel(x, y, r, g, b, a);
+                        }
+                        else if((x >= 0 && x <= PIXEL_WIDTH) && (y >= 0 && y <= PIXEL_HEIGHT)){
+                           char colorout[8];
+                           sprintf(colorout, "%06x\n", pixels[y * PIXEL_WIDTH + x] & 0xffffff);
+                           send(sock, colorout, sizeof(colorout) - 1, MSG_DONTWAIT | MSG_NOSIGNAL);
                         }
                      }
                   }
                }
-#else // ohne alpha
-               if(sscanf(buf,"PX %u %u %x",&x,&y,&c) == 3){
-                  set_pixel(x,y,c, 0xff);
-               }
-#endif
                else if(!strncmp(buf, "SIZE", 4)){
                   static const char out[] = "SIZE " STR(PIXEL_WIDTH) " " STR(PIXEL_HEIGHT) "\n";
-                  send(sock, out, sizeof(out), MSG_DONTWAIT | MSG_NOSIGNAL);
+                  send(sock, out, sizeof(out) - 1, MSG_DONTWAIT | MSG_NOSIGNAL);
+               }
+               else if(!strncmp(buf, "CONNECTIONS", 11)){
+                  char out[32];
+                  sprintf(out, "CONNECTIONS %d\n", client_thread_count);
+                  send(sock, out, strlen(out), MSG_DONTWAIT | MSG_NOSIGNAL);
+               }
+               else if(!strncmp(buf, "HELP", 4)){
+                  static const char out[] =
+                     "send pixel: 'PX {x} {y} {GG or RRGGBB or RRGGBBAA as HEX}\\n'; "
+                     "request pixel: 'PX {x} {y}\\n'; "
+                     "request resolution: 'SIZE\\n'; "
+                     "request client connection count: 'CONNECTIONS\\n'; "
+                     "request this help message: 'HELP\\n';\n";
+                  send(sock, out, sizeof(out) - 1, MSG_DONTWAIT | MSG_NOSIGNAL);
                }
                else{
-                  printf("QUATSCH[%i]: ", i);
+                  printf("BULLSHIT[%i]: ", i);
                   for (int j = 0; j < i; j++)
                      printf("%c", buf[j]);
                   printf("\n");
@@ -105,7 +128,7 @@ void * handle_client(void *s){
          }
          if (sizeof(buf) - read_pos == 0){ // received only garbage for a whole buffer. start over!
             buf[sizeof(buf) - 1] = 0;
-            printf("GARBAGE BUFFER: %s\n", buf);
+            printf("BULLSHIT BUFFER: %s\n", buf);
             read_pos = 0;
          }
       }
@@ -129,7 +152,7 @@ void * handle_clients(void * foobar){
    
    server_sock = socket(PF_INET, SOCK_STREAM, 0);
 
-   tv.tv_sec = 2;
+   tv.tv_sec = 5;
    tv.tv_usec = 0;
 
    addr.sin_addr.s_addr = INADDR_ANY;
