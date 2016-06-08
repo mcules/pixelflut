@@ -6,8 +6,9 @@ EXE_PI = pixel_pi
 PIXEL_WIDTH = 800
 PIXEL_HEIGHT = 600
 PORT = 1234
+SUPER_SECRET_UDP_BACKDOOR = 0
 
-DEFINES = -DPIXEL_WIDTH=$(PIXEL_WIDTH) -DPIXEL_HEIGHT=$(PIXEL_HEIGHT) -DPORT=$(PORT)
+DEFINES = -DPIXEL_WIDTH=$(PIXEL_WIDTH) -DPIXEL_HEIGHT=$(PIXEL_HEIGHT) -DPORT=$(PORT) -DSUPER_SECRET_UDP_BACKDOOR=$(SUPER_SECRET_UDP_BACKDOOR)
 IP = $(shell ip addr | grep 'state UP' -A2 | tail -n1 | awk '{print $$2}' | cut -f1 -d'/')
 INFO = $(IP):$(PORT) $(PIXEL_WIDTH)x$(PIXEL_HEIGHT)
 
@@ -16,7 +17,7 @@ all:
 
 
 
-LDFLAGS_PI = -O3 -Wl,--whole-archive -L/opt/vc/lib/ -lGLESv2 -lEGL -lbcm_host -lvcos -lvchiq_arm -lpthread -lrt -L/opt/vc/src/hello_pi/libs/vgfont -ldl -lm -Wl,--no-whole-archive -rdynamic
+LDFLAGS_PI = -O3 -Wl,--whole-archive -L/opt/vc/lib/ -lGLESv2 -lEGL -lbcm_host -lvcos -lvchiq_arm -lpthread -lrt -L/opt/vc/src/hello_pi/libs/vgfont -ldl -lm -levent -levent_pthreads -Wl,--no-whole-archive -rdynamic
 CFLAGS_PI = -c -O3 -g -DUSE_OPENGL -DUSE_EGL -DIS_RPI -DSTANDALONE -D__STDC_CONSTANT_MACROS -D__STDC_LIMIT_MACROS -DTARGET_POSIX -D_LINUX -fPIC -DPIC -D_REENTRANT -D_LARGEFILE64_SOURCE -D_FILE_OFFSET_BITS=64 -U_FORTIFY_SOURCE -Wall -g -DHAVE_LIBOPENMAX=2 -DOMX -DOMX_SKIP64BIT -ftree-vectorize -pipe -DUSE_EXTERNAL_OMX -DHAVE_LIBBCM_HOST -DUSE_EXTERNAL_LIBBCM_HOST -DUSE_VCHIQ_ARM -Wno-psabi -I/opt/vc/include/ -I/opt/vc/include/interface/vcos/pthreads -I/opt/vc/include/interface/vmcs_host/linux -I./ -I/opt/vc/src/hello_pi/libs/ilclient -I/opt/vc/src/hello_pi/libs/vgfont -g -Wno-deprecated-declarations -Wno-missing-braces
 
 pi: $(EXE_PI)
@@ -29,7 +30,7 @@ main_pi.o: main_pi.c
 
 
 
-LDFLAGS_SDL = `pkg-config --libs sdl2` -lm -lpthread -O3
+LDFLAGS_SDL = `pkg-config --libs sdl2` -lm -lpthread -levent -levent_pthreads -O3
 CFLAGS_SDL = -Wall -c `pkg-config --cflags sdl2` -Wall -O3
 
 sdl: $(EXE_SDL)

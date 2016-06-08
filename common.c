@@ -2,15 +2,17 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-#include <sys/types.h>
 #include <sys/socket.h>
-#include <sys/time.h>
 #include <netinet/in.h>
-#include <arpa/inet.h>
 #include <unistd.h>
 #include <pthread.h>
+#include <fcntl.h>
+#include <errno.h>
 
-#define BUFSIZE 2048
+#include <event2/event.h>
+#include <event2/buffer.h>
+#include <event2/bufferevent.h>
+#include <event2/thread.h>
 
 #define XSTR(a) #a
 #define STR(a) XSTR(a)
@@ -18,14 +20,11 @@
 int bytesPerPixel;
 uint8_t* pixels;
 volatile int running = 1;
-volatile int client_thread_count = 0;
-volatile int server_sock;
+volatile int client_count = 0;
+struct event_base *base;
+volatile evutil_socket_t listener;
 
-void * handle_client(void *);
-void * handle_clients(void *);
-
-void set_pixel(uint16_t x, uint16_t y, uint8_t r, uint8_t g, uint8_t b, uint8_t a)
-{
+void set_pixel(uint16_t x, uint16_t y, uint8_t r, uint8_t g, uint8_t b, uint8_t a){
    if(x < PIXEL_WIDTH && y < PIXEL_HEIGHT){
       uint8_t *pixel = ((uint8_t*)pixels) + (y * PIXEL_WIDTH + x) * bytesPerPixel; // RGB(A)
       if(a == 255){ // fast & usual path
@@ -42,214 +41,212 @@ void set_pixel(uint16_t x, uint16_t y, uint8_t r, uint8_t g, uint8_t b, uint8_t 
    }
 }
 
-void * handle_client(void *s){
-   client_thread_count++;
-   int sock = *(int*)s;
-   char buf[BUFSIZE];
-   int read_size, read_pos = 0;
-   uint32_t x,y,c;
-   while(running && (read_size = recv(sock , buf + read_pos, sizeof(buf) - read_pos , 0)) > 0){
-      read_pos += read_size;
-      int found = 1;
-      while (found){
-         found = 0;
-         int i;
-         for (i = 0; i < read_pos; i++){
-            if (buf[i] == '\n'){
-               buf[i] = 0;
-               if(!strncmp(buf, "PX ", 3)){ // ...don't ask :D...
-                  char *pos1 = buf + 3;
-                  x = strtoul(buf + 3, &pos1, 10);
-                  if(buf != pos1){
-                     pos1++;
-                     char *pos2 = pos1;
-                     y = strtoul(pos1, &pos2, 10);
-                     if(pos1 != pos2){
-                        pos2++;
-                        pos1 = pos2;
-                        c = strtoul(pos2, &pos1, 16);
-                        if(pos2 != pos1){
-                           uint8_t r, g, b, a;
-                           int codelen = pos1 - pos2;
-                           if(codelen > 6){ // rgba
-                              r = c >> 24;
-                              g = c >> 16;
-                              b = c >> 8;
-                              a = c;
-                           }
-                           else if(codelen > 2){ // rgb
-                              r = c >> 16;
-                              g = c >> 8;
-                              b = c;
-                              a = 255;
-                           }
-                           else{ // gray
-                              r = c;
-                              g = c;
-                              b = c;
-                              a = 255;
-                           }
-                           set_pixel(x, y, r, g, b, a);
-                        }
-                        else if((x >= 0 && x <= PIXEL_WIDTH) && (y >= 0 && y <= PIXEL_HEIGHT)){
-                           char colorout[8];
-                           sprintf(colorout, "%06x\n", pixels[y * PIXEL_WIDTH + x] & 0xffffff);
-                           send(sock, colorout, sizeof(colorout) - 1, MSG_DONTWAIT | MSG_NOSIGNAL);
-                        }
-                     }
-                  }
-               }
-               else if(!strncmp(buf, "SIZE", 4)){
-                  static const char out[] = "SIZE " STR(PIXEL_WIDTH) " " STR(PIXEL_HEIGHT) "\n";
-                  send(sock, out, sizeof(out) - 1, MSG_DONTWAIT | MSG_NOSIGNAL);
-               }
-               else if(!strncmp(buf, "CONNECTIONS", 11)){
-                  char out[32];
-                  sprintf(out, "CONNECTIONS %d\n", client_thread_count);
-                  send(sock, out, strlen(out), MSG_DONTWAIT | MSG_NOSIGNAL);
-               }
-               else if(!strncmp(buf, "HELP", 4)){
-                  static const char out[] =
-                     "send pixel: 'PX {x} {y} {GG or RRGGBB or RRGGBBAA as HEX}\\n'; "
-                     "request pixel: 'PX {x} {y}\\n'; "
-                     "request resolution: 'SIZE\\n'; "
-                     "request client connection count: 'CONNECTIONS\\n'; "
-                     "request this help message: 'HELP\\n';\n";
-                  send(sock, out, sizeof(out) - 1, MSG_DONTWAIT | MSG_NOSIGNAL);
-               }
-               else{
-                  printf("BULLSHIT[%i]: ", i);
-                  int j;
-                  for (j = 0; j < i; j++)
-                     printf("%c", buf[j]);
-                  printf("\n");
-               }
-               int offset = i + 1;
-               int count = read_pos - offset;
-               if (count > 0)
-                  memmove(buf, buf + offset, count); // TODO: ring buffer?
-               read_pos -= offset;
-               found = 1;
-               break;
-            }
+void handle_message(char *msg, struct evbuffer *output){
+   if(!strncmp(msg, "PX ", 3)){
+      char *x_end = msg + 3;
+      uint32_t x = strtoul(msg + 3, &x_end, 10);
+      if(msg + 3 == x_end) // no x?
+         return;
+
+      char *y_end = ++x_end;
+      uint32_t y = strtoul(x_end, &y_end, 10);
+      if(x_end == y_end) // no y?
+         return;
+
+      char *c_end = ++y_end;
+      uint32_t c = strtoul(y_end, &c_end, 16);
+      if(y_end == c_end) { // no color?
+         if((x >= 0 && x <= PIXEL_WIDTH) && (y >= 0 && y <= PIXEL_HEIGHT)) {
+            char out[8];
+            sprintf(out, "%06x\n", pixels[y * PIXEL_WIDTH + x] & 0xffffff);
+            evbuffer_add(output, out, sizeof(out) - 1);
          }
-         if (sizeof(buf) - read_pos == 0){ // received only garbage for a whole buffer. start over!
-            buf[sizeof(buf) - 1] = 0;
-            printf("BULLSHIT BUFFER: %s\n", buf);
-            read_pos = 0;
-         }
+         return;
       }
+
+      uint8_t r, g, b, a;
+      int c_len = c_end - y_end;
+           if(c_len > 6){ r = c >> 24; g = c >> 16; b = c >> 8; a = c  ; } // rgba
+      else if(c_len > 2){ r = c >> 16; g = c >>  8; b = c     ; a = 255; } // rgb
+      else              { r = c      ; g = c      ; b = c     ; a = 255; } // gray
+      set_pixel(x, y, r, g, b, a);
+      return;
    }
-   close(sock);
-   printf("Client disconnected\n");
-   fflush(stdout);
-   client_thread_count--;
-   return 0;
+
+   if(!strncmp(msg, "SIZE", 4)) {
+      static const char out[] = "SIZE " STR(PIXEL_WIDTH) " " STR(PIXEL_HEIGHT) "\n";
+      evbuffer_add(output, out, sizeof(out) - 1);
+      return;
+   }
+
+   if(!strncmp(msg, "CONNECTIONS", 11)) {
+      char out[32];
+      sprintf(out, "CONNECTIONS %d\n", client_count);
+      evbuffer_add(output, out, strlen(out));
+      return;
+   }
+
+   if(!strncmp(msg, "HELP", 4)) {
+      static const char out[] =
+         "send pixel: 'PX {x} {y} {GG or RRGGBB or RRGGBBAA as HEX}\\n'; "
+         "request pixel: 'PX {x} {y}\\n'; "
+         "request resolution: 'SIZE\\n'; "
+         "request client connection count: 'CONNECTIONS\\n'; "
+         "request this help message: 'HELP\\n';\n";
+      evbuffer_add(output, out, sizeof(out) - 1);
+      return;
+   }
+
+   evbuffer_add(output, "ERROR: UNKNOWN COMMAND\n", 6);
+}
+
+#define MAX_LINE 64
+void client_read(struct bufferevent *bev, void *ctx){
+    struct evbuffer *input = bufferevent_get_input(bev);
+    struct evbuffer *output = bufferevent_get_output(bev);
+    char *line;
+    while ((line = evbuffer_readln(input, NULL, EVBUFFER_EOL_ANY))) {
+        handle_message(line, output);
+        free(line);
+    }
+
+    if (evbuffer_get_length(input) >= MAX_LINE) {
+        /* Too long; just remove what there is and go on so that the buffer doesn't grow infinitely long. */
+        char buf[1024];
+        while (evbuffer_get_length(input)) {
+            /*int n =*/ evbuffer_remove(input, buf, sizeof(buf));
+        }
+    }
+}
+
+void client_error(struct bufferevent *bev, short error, void *ctx){
+    if (error & BEV_EVENT_EOF) {
+        /* connection has been closed, do any clean up here */
+        --client_count;
+    } else if (error & BEV_EVENT_ERROR) {
+        fprintf(stderr, "ERROR: %d\n", errno);
+        // --client_count; // ?
+    } else if (error & BEV_EVENT_TIMEOUT) {
+        /* must be a timeout event handle, handle it */
+        --client_count;
+    }
+    bufferevent_free(bev);
+}
+
+void accept_client(evutil_socket_t listener, short event, void *arg){
+    struct event_base *base = arg;
+    struct sockaddr_storage ss;
+    socklen_t slen = sizeof(ss);
+    int fd = accept(listener, (struct sockaddr*)&ss, &slen);
+    if (fd < 0) {
+        perror("accept");
+    } else if (fd > FD_SETSIZE) {
+        close(fd);
+    } else {
+        struct bufferevent *bev;
+        evutil_make_socket_nonblocking(fd);
+        bev = bufferevent_socket_new(base, fd, BEV_OPT_CLOSE_ON_FREE);
+
+        struct timeval tv;
+        tv.tv_sec = 5;
+        tv.tv_usec = 0;
+        bufferevent_set_timeouts(bev, &tv, &tv);
+        bufferevent_setcb(bev, client_read, NULL, client_error, NULL);
+        bufferevent_setwatermark(bev, EV_READ, 0, MAX_LINE);
+        bufferevent_enable(bev, EV_READ|EV_WRITE);
+        client_count++;
+    }
 }
 
 void * handle_clients(void * foobar){
-   pthread_t thread_id;
-   int client_sock;
-   socklen_t addr_len;
-   struct sockaddr_in addr;
-   addr_len = sizeof(addr);
-   struct timeval tv;
-   
-   printf("Starting Server...\n");
-   
-   server_sock = socket(PF_INET, SOCK_STREAM, 0);
+    struct sockaddr_in sin;
+    struct event *listener_event;
 
-   tv.tv_sec = 5;
-   tv.tv_usec = 0;
+    if (evthread_use_pthreads() < 0)
+       perror("evthread_use_pthreads");
 
-   addr.sin_addr.s_addr = INADDR_ANY;
-   addr.sin_port = htons(PORT);
-   addr.sin_family = AF_INET;
-   
-   if (server_sock == -1){
-      perror("socket() failed");
-      return 0;
-   }
-   
-   if (setsockopt(server_sock, SOL_SOCKET, SO_REUSEADDR, &(int){ 1 }, sizeof(int)) < 0)
-      printf("setsockopt(SO_REUSEADDR) failed\n");
-   if (setsockopt(server_sock, SOL_SOCKET, SO_REUSEPORT, &(int){ 1 }, sizeof(int)) < 0)
-      printf("setsockopt(SO_REUSEPORT) failed\n");
+    base = event_base_new();
+    if (!base) {
+        perror("event_base_new");
+        return NULL;
+    }
 
-   int retries;
-   for (retries = 0; bind(server_sock, (struct sockaddr*)&addr, sizeof(addr)) == -1 && retries < 10; retries++){
-      perror("bind() failed ...retry in 5s");
-      usleep(5000000);
-   }
-   if (retries == 10)
-      return 0;
+    sin.sin_family = AF_INET;
+    sin.sin_addr.s_addr = 0;
+    sin.sin_port = htons(PORT);
 
-   if (listen(server_sock, 3) == -1){
-      perror("listen() failed");
-      return 0;
-   }
-   printf("Listening...\n");
-   
-   setsockopt(server_sock, SOL_SOCKET, SO_SNDTIMEO, (char *)&tv,sizeof(struct timeval));
-   setsockopt(server_sock, SOL_SOCKET, SO_RCVTIMEO, (char *)&tv,sizeof(struct timeval));
+    listener = socket(AF_INET, SOCK_STREAM, 0);
+    evutil_make_socket_nonblocking(listener);
 
-   while(running){
-      client_sock = accept(server_sock, (struct sockaddr*)&addr, &addr_len);
-      if(client_sock > 0){
-         printf("Client %s connected\n", inet_ntoa(addr.sin_addr));
-         if( pthread_create( &thread_id , NULL ,  handle_client , (void*) &client_sock) < 0)
-         {
-            close(client_sock);
-            perror("could not create thread");
-         }
-      }
-   }
-   close(server_sock);
-   return 0;
+    setsockopt(listener, SOL_SOCKET, SO_REUSEADDR, &(int){ 1 }, sizeof(int));
+
+    if (bind(listener, (struct sockaddr*)&sin, sizeof(sin)) < 0) {
+        perror("bind");
+        return NULL;
+    }
+
+    if (listen(listener, FD_SETSIZE) < 0) {
+        perror("listen");
+        return NULL;
+    }
+
+    struct timeval tv;
+    tv.tv_sec = 5;
+    tv.tv_usec = 0;
+    setsockopt(listener, SOL_SOCKET, SO_SNDTIMEO, (char *)&tv, sizeof(struct timeval));
+    setsockopt(listener, SOL_SOCKET, SO_RCVTIMEO, (char *)&tv, sizeof(struct timeval));
+
+    listener_event = event_new(base, listener, EV_READ|EV_PERSIST, accept_client, (void*)base);
+    if (!listener_event) {
+        perror("event_new");
+        return NULL;
+    }
+    event_add(listener_event, NULL);
+
+    event_base_dispatch(base);
+    return NULL;
 }
 
+#if SUPER_SECRET_UDP_BACKDOOR
+volatile int listener_udp;
 void * handle_udp(void * foobar){
-   int s = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-   if (s < 0){
+   listener_udp = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+   if (listener_udp < 0) {
       perror("udp socket() failed");
       return 0;
    }
 
-   if (setsockopt(s, SOL_SOCKET, SO_REUSEADDR, &(int){ 1 }, sizeof(int)) < 0)
+   if (setsockopt(listener_udp, SOL_SOCKET, SO_REUSEADDR, &(int){ 1 }, sizeof(int)) < 0)
       printf("udp setsockopt(SO_REUSEADDR) failed\n");
 
    struct sockaddr_in si_me = {};
    si_me.sin_family = AF_INET;
    si_me.sin_port = htons(PORT);
    si_me.sin_addr.s_addr = htonl(INADDR_ANY);
-   if (bind(s, (struct sockaddr*)&si_me, sizeof(si_me)) < 0){
+   if (bind(listener_udp, (struct sockaddr*)&si_me, sizeof(si_me)) < 0) {
       perror("udp bind() failed");
       return 0;
    }
 
    #define UDP_BUFFER_SIZE 65507
-   while(running){
+   while(running) {
       uint8_t buf[UDP_BUFFER_SIZE];
-      int n = recv(s, buf, UDP_BUFFER_SIZE, 0);
-      if (n < 0){
+      int n = recv(listener_udp, buf, UDP_BUFFER_SIZE, 0);
+      if (n < 0) {
          perror("udp recv() failed");
          return 0;
       }
-      if (n > 6)
-      {
+      if (n > 6) {
          uint16_t *p = (uint16_t*)buf;
          int x = p[0], y = p[1], stride = p[2];
          uint8_t *data = buf + 6;
          int pixelCount = (n - 6) / 3;
-         if (x + stride <= PIXEL_WIDTH)
-         {
-            while(y < PIXEL_HEIGHT && pixelCount)
-            {
+         if (x + stride <= PIXEL_WIDTH) {
+            while(y < PIXEL_HEIGHT && pixelCount) {
                int linePixelCount = pixelCount > stride ? stride : pixelCount;
                uint8_t *pixel = pixels + (y * PIXEL_WIDTH + x) * bytesPerPixel;
                int i;
-               for (i = 0; i < linePixelCount; i++)
-               {
+               for (i = 0; i < linePixelCount; i++) {
                   pixel[0] = data[0];
                   pixel[1] = data[1];
                   pixel[2] = data[2];
@@ -264,9 +261,12 @@ void * handle_udp(void * foobar){
    }
    return 0;
 }
+#endif
 
 pthread_t thread_id;
+#if SUPER_SECRET_UDP_BACKDOOR
 pthread_t udp_thread_id;
+#endif
 int server_start()
 {
    pixels = calloc(PIXEL_WIDTH * PIXEL_HEIGHT, bytesPerPixel);
@@ -278,12 +278,14 @@ int server_start()
       return 0;
    }
 
+#if SUPER_SECRET_UDP_BACKDOOR
    if(pthread_create(&udp_thread_id , NULL, handle_udp , NULL) < 0){
       perror("could not create udp thread");
       running = 0;
       free(pixels);
       return 0;
    }
+#endif
 
    return 1;
 }
@@ -291,11 +293,20 @@ int server_start()
 void server_stop()
 {
    running = 0;
-   printf("Shutting Down...\n");
-   while (client_thread_count)
-      usleep(100000);
-   close(server_sock);
-   pthread_join(thread_id, NULL);
-   pthread_join(udp_thread_id, NULL);
+   printf("Shutting Down.\n");
+   close(listener);
+#if SUPER_SECRET_UDP_BACKDOOR
+   close(listener_udp);
+#endif
+   printf("Stopped listening.\n");
+   if (event_base_loopexit(base, NULL) < 0)
+      perror("event_base_loopexit");
+   printf("Exited event loop?\n");
+   //pthread_join(thread_id, NULL); // TODO: really terminate the event loop!
+   //printf("Joined main server thread...\n");
+//#if SUPER_SECRET_UDP_BACKDOOR
+   //pthread_join(udp_thread_id, NULL); // TODO: really terminate the thread!
+   //printf("Joined secondary server thread.\n");
+//#endif
    free(pixels);
 }
