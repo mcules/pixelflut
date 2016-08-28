@@ -162,7 +162,18 @@
 			}
 		</script>
 	</head>
-	<body onload="showdata();">
-		<canvas id="datacanvas" width="512" height="512" style="border: none;"></canvas>
+	<body onload="showdata();" style="background:black;color:white;font-family:monospace;">
+		<h1>ohai to pixelflut!</h1>
+		Real-time usage of the RGB color space quantized to eight sections on each axis:<br>
+		<canvas id="datacanvas" width="512" height="512" style="border: none;"></canvas><br>
+		<h2>how to flut</h2>
+		Connect via TCP to this address/port and use the following commandz:
+		<ul>
+			<li><b>send pixel:</b> 'PX {x} {y} {GG or RRGGBB or RRGGBBAA as HEX}\n'</li>
+			<li><b>request pixel:</b> 'PX {x} {y}\n'</li>
+			<li><b>request resolution:</b> 'SIZE\n'</li>
+			<li><b>request client connection count:</b> 'CONNECTIONS\n'</li>
+			<li><b>request this help message:</b> 'HELP\n'</li>
+		</ul>
 	</body>
 </html>
