@@ -69,8 +69,7 @@
 			{
 				requestAnimFrame(drawScene);
 
-				var g = 0.1 + 0.1 * Math.sin(0.73 * time);
-				gl.clearColor(g, g, g, 1.0);
+				gl.clearColor(0.0, 0.0, 0.0, 1.0);
 				gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
 				gl.useProgram(shaderProgram);
