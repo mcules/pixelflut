@@ -15,16 +15,16 @@
 #define XSTR(a) #a
 #define STR(a) XSTR(a)
 
-int bytesPerPixel;
-uint8_t* pixels;
-volatile int running = 1;
-volatile int client_thread_count = 0;
-volatile int server_sock;
-volatile unsigned int histogram[8][8][8] = {0};
-volatile unsigned int total = 0;
+static int bytesPerPixel;
+static uint8_t* pixels;
+static volatile int running = 1;
+static volatile int client_thread_count;
+static volatile int server_sock;
+static volatile unsigned int histogram[8][8][8];
+static volatile unsigned int total;
 
-uint8_t* index_html = 0;
-int index_html_len = 0;
+static uint8_t* index_html = 0;
+static int index_html_len = 0;
 
 void * handle_client(void *);
 void * handle_clients(void *);
@@ -52,13 +52,14 @@ void set_pixel(uint16_t x, uint16_t y, uint8_t r, uint8_t g, uint8_t b, uint8_t 
 void update_pixels()
 {
    static int frame = 0;
+   int x, y, r, g, b;
 
    if (frame % 4 == 0)
    {
       // fade out
-      for (int y = 0; y < PIXEL_HEIGHT; y++)
+      for (y = 0; y < PIXEL_HEIGHT; y++)
       {
-         for (int x = 0; x < PIXEL_WIDTH; x++)
+         for (x = 0; x < PIXEL_WIDTH; x++)
          {
             uint8_t *pixel = ((uint8_t*)pixels) + (y * PIXEL_WIDTH + x) * bytesPerPixel; // RGB(A)
             pixel[0] = pixel[0] ? pixel[0] - 1 : pixel[0];
@@ -68,9 +69,9 @@ void update_pixels()
       }
       
       // update histogram
-      for (int r = 0; r < 8; r++)
-         for (int g = 0; g < 8; g++)
-            for (int b = 0; b < 8; b++)
+      for (r = 0; r < 8; r++)
+         for (g = 0; g < 8; g++)
+            for (b = 0; b < 8; b++)
                histogram[r][g][b] *= 0.99;
    }
    
@@ -127,7 +128,7 @@ void * handle_client(void *s){
    int sock = *(int*)s;
    char buf[BUFSIZE];
    int read_size, read_pos = 0;
-   uint32_t x,y,c;
+   uint32_t x,y,c, hi;
    while(running && (read_size = recv(sock , buf + read_pos, sizeof(buf) - read_pos , 0)) > 0){
       read_pos += read_size;
       int found = 1;
@@ -202,7 +203,7 @@ void * handle_client(void *s){
                   if (!strncmp(buf + 4, "/data.json", 10)){
                      strcpy(out, "HTTP/1.1 200 OK\r\n\r\nvar data=[");
                      char *hp = out + sizeof("HTTP/1.1 200 OK\r\n\r\nvar data=[") - 1;
-                     for (int hi = 0; hi < 8 * 8 * 8; hi++){
+                     for (hi = 0; hi < 8 * 8 * 8; hi++){
                         hp = itoa(((unsigned int*)&histogram[0][0][0])[hi], hp);
                         *hp++ = ',';
                      }
