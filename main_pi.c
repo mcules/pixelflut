@@ -224,6 +224,7 @@ int main(int argc, char *argv[])
 	
 	while(!kbhit())
 	{
+		update_pixels();
 		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, PIXEL_WIDTH, PIXEL_HEIGHT, 0, GL_RGB, GL_UNSIGNED_BYTE, pixels);
 		glDrawArrays(GL_TRIANGLES, 0, 6);
 		eglSwapBuffers(display, surface);

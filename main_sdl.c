@@ -27,6 +27,7 @@ int main(){
    }
    
    while(42){
+      update_pixels();
       SDL_UpdateTexture(sdlTexture, NULL, pixels, PIXEL_WIDTH * bytesPerPixel);
       SDL_RenderCopy(renderer, sdlTexture, NULL, NULL);
       SDL_RenderPresent(renderer);
