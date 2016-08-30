@@ -201,8 +201,8 @@ void * handle_client(void *s){
                else if(!strncmp(buf, "GET", 3)){ // obviously totally HTTP compliant!
                   char out[16384];
                   if (!strncmp(buf + 4, "/data.json", 10)){
-                     strcpy(out, "HTTP/1.1 200 OK\r\n\r\nvar data=[");
-                     char *hp = out + sizeof("HTTP/1.1 200 OK\r\n\r\nvar data=[") - 1;
+                     strcpy(out, "HTTP/1.1 200 OK\r\n\r\n[");
+                     char *hp = out + sizeof("HTTP/1.1 200 OK\r\n\r\n[") - 1;
                      for (hi = 0; hi < 8 * 8 * 8; hi++){
                         hp = itoa(((unsigned int*)&histogram[0][0][0])[hi], hp);
                         *hp++ = ',';

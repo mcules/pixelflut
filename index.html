@@ -13,9 +13,25 @@
 			var time = 0.0;
 			var timeDelta = 0.0;
 
+			var data = [];
 			var uploadedData = [];
 		
 			// data stuff:
+			function loadData()
+			{
+				var xhttp = new XMLHttpRequest();
+				xhttp.onreadystatechange = function()
+				{
+					if (xhttp.readyState == 4 && xhttp.status == 200)
+						data = JSON.parse(xhttp.responseText);
+				};
+				xhttp.open("GET", "data.json", true);
+				xhttp.send();
+			}
+
+			//loadData();
+			setInterval(loadData, 500);
+			
 			function fadeAndUploadData()
 			{
 				var vertices = [];
@@ -23,25 +39,12 @@
 				{
 					if (!uploadedData[i])
 						uploadedData[i] = data[i];
-					uploadedData[i] = 0.5 * uploadedData[i] + 0.5 * data[i];
+					uploadedData[i] = 0.95 * uploadedData[i] + 0.05 * data[i];
 					vertices[i * 2 + 0] = i;
 					vertices[i * 2 + 1] = Math.sqrt(uploadedData[i]);
 				}
 				gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STREAM_DRAW);
 			}
-			
-			function loadData()
-			{
-				var fileref = document.createElement('script');
-				fileref.setAttribute("type", "text/javascript");
-				fileref.setAttribute("src", "data.json");
-				//fileref.onload = dataLoaded;
-				if (typeof fileref!="undefined")
-					document.getElementsByTagName("head")[0].appendChild(fileref);
-			}
-
-			//loadData();
-			setInterval(loadData, 500);
 
 			// WebGL stuff:
 			function getShader(type, text)
@@ -111,7 +114,7 @@
 				})();
 
 				canvas = document.getElementById("datacanvas");
-				//canvas.onresize = resize;
+				canvas.onresize = resize;
 	
 				var names = [ "webgl", "experimental-webgl", "moz-webgl", "webkit-3d" ];
 				for (var i = 0; i < names.length; i++)
@@ -157,7 +160,6 @@
 				
 				vertexBuffer = gl.createBuffer();
 				gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
-				data = [];
 				fadeAndUploadData();
 				gl.enableVertexAttribArray(shaderProgram.dataAttribute);
 				gl.vertexAttribPointer(shaderProgram.dataAttribute, 2, gl.FLOAT, false, 0, 0);
