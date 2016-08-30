@@ -142,9 +142,11 @@
 						"color = vec4(fract(data.x * vec3(1.0 / 512.0, 1.0 / 64.0, 1.0 / 8.0)), 1.0);\n" +
 						"float ct = cos(0.5 * t), st = sin(0.5 * t);\n" +
 						"mat4 m = mat4(ct, 0.0, -st, 0.0,  0.0, 1.0, 0.0, 0.0,  st, 0.0, ct, 0.0,  0.2 * sin(t * 1.4), 0.2 * sin(t * 2.3), -1.0, 1.0);\n" +
-						"gl_Position = p * (m * vec4(2.0 * fract(data.x * vec3(1.0 / 512.0, 1.0 / 64.0, 1.0 / 8.0)) - vec3(1.0), 1.0));\n" +
+						"vec3 pos = fract(data.x * vec3(1.0 / 512.0, 1.0 / 64.0, 1.0 / 8.0));" +
+						"pos -= vec3(pos.yz / 8.0, 0.0);\n" +
+						"gl_Position = p * (m * vec4(2.0 * pos - vec3(1.0), 1.0));\n" +
 						"float z = gl_Position.z / gl_Position.w;\n" + 
-						"gl_PointSize = clamp(2.0 + 16.0 * data.y * 0.005 - 2.0 * z, 1.0, 128.0);\n" +
+						"gl_PointSize = clamp(2.0 + 20.0 * data.y * 0.005 * (1.0 - z), 1.0, 128.0);\n" +
 					"}\n";
 				var fs = "varying mediump vec4 color;\n" +
 					"void main()\n" +
