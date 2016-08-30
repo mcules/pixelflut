@@ -12,15 +12,20 @@
 			var timeStart = 0.0;
 			var time = 0.0;
 			var timeDelta = 0.0;
+
+			var uploadedData = [];
 		
 			// data stuff:
-			function dataLoaded()
+			function fadeAndUploadData()
 			{
 				var vertices = [];
 				for (var i = 0; i < 8 * 8 * 8; i++)
 				{
+					if (!uploadedData[i])
+						uploadedData[i] = data[i];
+					uploadedData[i] = 0.5 * uploadedData[i] + 0.5 * data[i];
 					vertices[i * 2 + 0] = i;
-					vertices[i * 2 + 1] = Math.sqrt(data[i]);
+					vertices[i * 2 + 1] = Math.sqrt(uploadedData[i]);
 				}
 				gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STREAM_DRAW);
 			}
@@ -30,13 +35,13 @@
 				var fileref = document.createElement('script');
 				fileref.setAttribute("type", "text/javascript");
 				fileref.setAttribute("src", "data.json");
-				fileref.onload = dataLoaded;
+				//fileref.onload = dataLoaded;
 				if (typeof fileref!="undefined")
 					document.getElementsByTagName("head")[0].appendChild(fileref);
 			}
 
 			//loadData();
-			setInterval(loadData, 200);
+			setInterval(loadData, 500);
 
 			// WebGL stuff:
 			function getShader(type, text)
@@ -68,6 +73,7 @@
 			function drawScene()
 			{
 				requestAnimFrame(drawScene);
+				fadeAndUploadData();
 
 				gl.clearColor(0.0, 0.0, 0.0, 1.0);
 				gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
@@ -100,7 +106,7 @@
 						window.msRequestAnimationFrame ||
 						function(callback, element)
 						{
-							window.setTimeout(callback, 1000/60);
+							window.setTimeout(callback, 1000/30);
 						};
 				})();
 
@@ -131,7 +137,8 @@
 					"void main()\n" +
 					"{\n" +
 						"color = vec4(fract(data.x * vec3(1.0 / 512.0, 1.0 / 64.0, 1.0 / 8.0)), 1.0);\n" +
-						"mat4 m = mat4(cos(0.5 * t), 0.0, -sin(0.5 * t), 0.0,  0.0, 1.0, 0.0, 0.0,  sin(0.5 * t), 0.0, cos(0.5 * t), 0.0,  0.2 * sin(t * 1.4), 0.2 * sin(t * 2.3), -1.0, 1.0);\n" +
+						"float ct = cos(0.5 * t), st = sin(0.5 * t);\n" +
+						"mat4 m = mat4(ct, 0.0, -st, 0.0,  0.0, 1.0, 0.0, 0.0,  st, 0.0, ct, 0.0,  0.2 * sin(t * 1.4), 0.2 * sin(t * 2.3), -1.0, 1.0);\n" +
 						"gl_Position = p * (m * vec4(2.0 * fract(data.x * vec3(1.0 / 512.0, 1.0 / 64.0, 1.0 / 8.0)) - vec3(1.0), 1.0));\n" +
 						"float z = gl_Position.z / gl_Position.w;\n" + 
 						"gl_PointSize = clamp(2.0 + 16.0 * data.y * 0.005 - 2.0 * z, 1.0, 128.0);\n" +
@@ -151,7 +158,7 @@
 				vertexBuffer = gl.createBuffer();
 				gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
 				data = [];
-				dataLoaded();
+				fadeAndUploadData();
 				gl.enableVertexAttribArray(shaderProgram.dataAttribute);
 				gl.vertexAttribPointer(shaderProgram.dataAttribute, 2, gl.FLOAT, false, 0, 0);
 
