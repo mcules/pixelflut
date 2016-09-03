@@ -177,8 +177,8 @@ void * handle_client(void *s){
                            set_pixel(x, y, r, g, b, a);
                         }
                         else if((x < PIXEL_WIDTH) && (y < PIXEL_HEIGHT)){
-                           char colorout[20];
-                           sprintf(colorout, "PX %d %d %06x\n",x,y, pixels[y * PIXEL_WIDTH + x] & 0xffffff);
+                           char colorout[30];
+                           snprintf(colorout, sizeof(colorout), "PX %d %d %06x\n",x,y, pixels[y * PIXEL_WIDTH + x] & 0xffffff);
                            send(sock, colorout, sizeof(colorout) - 1, MSG_DONTWAIT | MSG_NOSIGNAL);
                         }
                      }
