@@ -260,6 +260,8 @@ disconnect:
 }
 
 void * handle_clients(void * foobar){
+   (void)foobar;
+
    pthread_t thread_id;
    int client_sock;
    socklen_t addr_len;
@@ -321,6 +323,8 @@ void * handle_clients(void * foobar){
 }
 
 void * handle_udp(void * foobar){
+   (void)foobar;
+
    int s = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
    if (s < 0){
       perror("udp socket() failed");
