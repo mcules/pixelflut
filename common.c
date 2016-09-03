@@ -129,6 +129,7 @@ void * handle_client(void *s){
    char buf[BUFSIZE];
    int read_size, read_pos = 0;
    uint32_t x,y,c, hi;
+   int32_t offset_x = 0, offset_y = 0;
    while(running && (read_size = recv(sock , buf + read_pos, sizeof(buf) - read_pos , 0)) > 0){
       read_pos += read_size;
       int found = 1;
@@ -146,6 +147,9 @@ void * handle_client(void *s){
                      char *pos2 = pos1;
                      y = strtoul(pos1, &pos2, 10);
                      if(pos1 != pos2){
+                        x += offset_x;
+                        y += offset_y;
+                         
                         pos2++;
                         pos1 = pos2;
                         c = strtoul(pos2, &pos1, 16);
@@ -172,15 +176,20 @@ void * handle_client(void *s){
                            }
                            set_pixel(x, y, r, g, b, a);
                         }
-                        else if((x >= 0 && x <= PIXEL_WIDTH) && (y >= 0 && y <= PIXEL_HEIGHT)){
+                        else if((x < PIXEL_WIDTH) && (y < PIXEL_HEIGHT)){
                            char colorout[30];
                            snprintf(colorout, sizeof(colorout), "PX %d %d %06x\n",x,y, pixels[y * PIXEL_WIDTH + x] & 0xffffff);
                            send(sock, colorout, sizeof(colorout) - 1, MSG_DONTWAIT | MSG_NOSIGNAL);
                         }
                      }
                   }
-               }
-               else if(!strncmp(buf, "SIZE", 4)){
+               } else if(!strncmp(buf, "OFFSET ", 7)){
+                   int32_t x, y;
+                   if (sscanf(buf + 7, "%i %i", &x,&y) == 2){
+                       offset_x = x;
+                       offset_y = y;
+                   }
+               } else if(!strncmp(buf, "SIZE", 4)){
                   static const char out[] = "SIZE " STR(PIXEL_WIDTH) " " STR(PIXEL_HEIGHT) "\n";
                   send(sock, out, sizeof(out) - 1, MSG_DONTWAIT | MSG_NOSIGNAL);
                }
