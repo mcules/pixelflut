@@ -41,10 +41,12 @@ void set_pixel(uint16_t x, uint16_t y, uint8_t r, uint8_t g, uint8_t b, uint8_t 
          pixel[2] = b;
       }
       else{
-         float alpha = a / 255.0f, nalpha = 1.0f - alpha;
-         pixel[0] = (uint8_t)(r * alpha + pixel[0] * nalpha);
-         pixel[1] = (uint8_t)(g * alpha + pixel[1] * nalpha);
-         pixel[2] = (uint8_t)(b * alpha + pixel[2] * nalpha);
+         int alpha = a * 65793;
+         int nalpha = (255 - a) * 65793;
+
+         pixel[0] = (uint8_t)(r * alpha + pixel[0] * nalpha) >> 16;
+         pixel[1] = (uint8_t)(g * alpha + pixel[1] * nalpha) >> 16;
+         pixel[2] = (uint8_t)(b * alpha + pixel[2] * nalpha) >> 16;
       }
    }
 }
