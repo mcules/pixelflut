@@ -260,6 +260,8 @@ disconnect:
 }
 
 void * handle_clients(void * foobar){
+   (void)foobar;
+
    pthread_t thread_id;
    int client_sock;
    socklen_t addr_len;
@@ -321,6 +323,8 @@ void * handle_clients(void * foobar){
 }
 
 void * handle_udp(void * foobar){
+   (void)foobar;
+
    int s = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
    if (s < 0){
       perror("udp socket() failed");
@@ -330,7 +334,7 @@ void * handle_udp(void * foobar){
    if (setsockopt(s, SOL_SOCKET, SO_REUSEADDR, &(int){ 1 }, sizeof(int)) < 0)
       printf("udp setsockopt(SO_REUSEADDR) failed\n");
 
-   struct sockaddr_in si_me = {};
+   struct sockaddr_in si_me = {0};
    si_me.sin_family = AF_INET;
    si_me.sin_port = htons(PORT);
    si_me.sin_addr.s_addr = htonl(INADDR_ANY);
