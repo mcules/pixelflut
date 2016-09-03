@@ -336,6 +336,13 @@ void * handle_udp(void * foobar){
    if (setsockopt(s, SOL_SOCKET, SO_REUSEADDR, &(int){ 1 }, sizeof(int)) < 0)
       printf("udp setsockopt(SO_REUSEADDR) failed\n");
 
+   struct timeval tv;
+   tv.tv_sec = 5;
+   tv.tv_usec = 0;
+   if (setsockopt(s, SOL_SOCKET, SO_RCVTIMEO,&tv,sizeof(tv)) < 0) {
+      printf("Error setting socket timeout\n");
+   }
+
    struct sockaddr_in si_me = {0};
    si_me.sin_family = AF_INET;
    si_me.sin_port = htons(PORT);
@@ -411,11 +418,17 @@ int server_start()
 void server_stop()
 {
    running = 0;
-   printf("Shutting Down...\n");
-   //while (client_thread_count)
-   //   usleep(100000);
+   printf("Shutting Down %d childs ...\n", client_thread_count);
+   while (client_thread_count)
+      usleep(100000);
+   printf("Shutting Down socket ...\n");
    close(server_sock);
-   //pthread_join(thread_id, NULL);
-   //pthread_join(udp_thread_id, NULL);
+   printf("Joining threads ... ");
+   printf("TCP ... ");
+   pthread_join(thread_id, NULL);
+   printf("UDP ... ");
+   pthread_join(udp_thread_id, NULL);
+   printf("done\n");
+   printf("Cleaning memory\n");
    free(pixels);
 }
