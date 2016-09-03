@@ -10,7 +10,7 @@ int main(){
       PIXEL_WIDTH, PIXEL_HEIGHT, SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE);
    SDL_Renderer *renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
    SDL_RenderClear(renderer);
-   
+
    SDL_Texture* sdlTexture = SDL_CreateTexture(
       renderer, SDL_PIXELFORMAT_ABGR8888, SDL_TEXTUREACCESS_STREAMING,
       PIXEL_WIDTH, PIXEL_HEIGHT);
@@ -20,12 +20,12 @@ int main(){
       return 1;
    }
    bytesPerPixel = 4;
-   
+
    if (!server_start()){
       SDL_Quit();
       return 1;
    }
-   
+
    while(42){
       update_pixels();
       SDL_UpdateTexture(sdlTexture, NULL, pixels, PIXEL_WIDTH * bytesPerPixel);
@@ -51,6 +51,7 @@ int main(){
    }
 
    server_stop();
+
    SDL_DestroyWindow(window);
    SDL_Quit();
    return 0;

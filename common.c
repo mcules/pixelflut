@@ -54,14 +54,13 @@ void set_pixel(uint16_t x, uint16_t y, uint8_t r, uint8_t g, uint8_t b, uint8_t 
 void update_pixels()
 {
    static int frame = 0;
-   int x, y, r, g, b;
 
    if (frame % 4 == 0)
    {
       // fade out
-      for (y = 0; y < PIXEL_HEIGHT; y++)
+      for (int y = 0; y < PIXEL_HEIGHT; y++)
       {
-         for (x = 0; x < PIXEL_WIDTH; x++)
+         for (int x = 0; x < PIXEL_WIDTH; x++)
          {
             uint8_t *pixel = ((uint8_t*)pixels) + (y * PIXEL_WIDTH + x) * bytesPerPixel; // RGB(A)
             pixel[0] = pixel[0] ? pixel[0] - 1 : pixel[0];
@@ -69,14 +68,14 @@ void update_pixels()
             pixel[2] = pixel[2] ? pixel[2] - 1 : pixel[2];
          }
       }
-      
+
       // update histogram
-      for (r = 0; r < 8; r++)
-         for (g = 0; g < 8; g++)
-            for (b = 0; b < 8; b++)
+      for (int r = 0; r < 8; r++)
+         for (int g = 0; g < 8; g++)
+            for (int b = 0; b < 8; b++)
                histogram[r][g][b] *= 0.99;
    }
-   
+
    frame++;
 }
 
@@ -134,11 +133,10 @@ void * handle_client(void *s){
    int32_t offset_x = 0, offset_y = 0;
    while(running && (read_size = recv(sock , buf + read_pos, sizeof(buf) - read_pos , 0)) > 0){
       read_pos += read_size;
-      int found = 1;
-      while (found){
+      int found;
+      do{
          found = 0;
-         int i;
-         for (i = 0; i < read_pos; i++){
+         for (int i = 0; i < read_pos; i++){
             if (buf[i] == '\n'){
                buf[i] = 0;
                if(!strncmp(buf, "PX ", 3)){ // ...don't ask :D...
@@ -151,7 +149,7 @@ void * handle_client(void *s){
                      if(pos1 != pos2){
                         x += offset_x;
                         y += offset_y;
-                         
+
                         pos2++;
                         pos1 = pos2;
                         c = strtoul(pos2, &pos1, 16);
@@ -236,6 +234,7 @@ void * handle_client(void *s){
                   for (j = 0; j < i; j++)
                      printf("%c", buf[j]);
                   printf("\n");*/
+                  break;
                }
                int offset = i + 1;
                int count = read_pos - offset;
@@ -251,8 +250,9 @@ void * handle_client(void *s){
             //printf("BULLSHIT BUFFER: %s\n", buf);
             read_pos = 0;
          }
-      }
+      }while (found);
    }
+
 disconnect:
    close(sock);
    //printf("Client disconnected\n");
@@ -270,9 +270,9 @@ void * handle_clients(void * foobar){
    struct sockaddr_in addr;
    addr_len = sizeof(addr);
    struct timeval tv;
-   
+
    printf("Starting Server...\n");
-   
+
    server_sock = socket(PF_INET, SOCK_STREAM, 0);
 
    tv.tv_sec = 5;
@@ -281,12 +281,12 @@ void * handle_clients(void * foobar){
    addr.sin_addr.s_addr = INADDR_ANY;
    addr.sin_port = htons(PORT);
    addr.sin_family = AF_INET;
-   
+
    if (server_sock == -1){
       perror("socket() failed");
       return 0;
    }
-   
+
    if (setsockopt(server_sock, SOL_SOCKET, SO_REUSEADDR, &(int){ 1 }, sizeof(int)) < 0)
       printf("setsockopt(SO_REUSEADDR) failed\n");
    if (setsockopt(server_sock, SOL_SOCKET, SO_REUSEPORT, &(int){ 1 }, sizeof(int)) < 0)
@@ -305,7 +305,7 @@ void * handle_clients(void * foobar){
       return 0;
    }
    printf("Listening...\n");
-   
+
    setsockopt(server_sock, SOL_SOCKET, SO_SNDTIMEO, (char *)&tv,sizeof(struct timeval));
    setsockopt(server_sock, SOL_SOCKET, SO_RCVTIMEO, (char *)&tv,sizeof(struct timeval));
 
@@ -372,8 +372,7 @@ void * handle_udp(void * foobar){
             {
                int linePixelCount = pixelCount > stride ? stride : pixelCount;
                uint8_t *pixel = pixels + (y * PIXEL_WIDTH + x) * bytesPerPixel;
-               int i;
-               for (i = 0; i < linePixelCount; i++)
+               for (int i = 0; i < linePixelCount; i++)
                {
                   pixel[0] = data[0];
                   pixel[1] = data[1];
