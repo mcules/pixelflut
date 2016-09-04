@@ -9,6 +9,7 @@
 #include <arpa/inet.h>
 #include <unistd.h>
 #include <pthread.h>
+#include <errno.h>
 
 #define BUFSIZE 2048
 
@@ -357,8 +358,9 @@ void * handle_udp(void * foobar){
       uint8_t buf[UDP_BUFFER_SIZE];
       int n = recv(s, buf, UDP_BUFFER_SIZE, 0);
       if (n < 0){
-         perror("udp recv() failed");
-         return 0;
+         if(errno != EAGAIN)
+            perror("udp recv() failed");
+         continue;
       }
       if (n > 6)
       {
