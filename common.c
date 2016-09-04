@@ -9,6 +9,7 @@
 #include <arpa/inet.h>
 #include <unistd.h>
 #include <pthread.h>
+#include <errno.h>
 
 #define BUFSIZE 2048
 
@@ -41,10 +42,12 @@ void set_pixel(uint16_t x, uint16_t y, uint8_t r, uint8_t g, uint8_t b, uint8_t 
          pixel[2] = b;
       }
       else{
-         float alpha = a / 255.0f, nalpha = 1.0f - alpha;
-         pixel[0] = (uint8_t)(r * alpha + pixel[0] * nalpha);
-         pixel[1] = (uint8_t)(g * alpha + pixel[1] * nalpha);
-         pixel[2] = (uint8_t)(b * alpha + pixel[2] * nalpha);
+         int alpha = a * 65793;
+         int nalpha = (255 - a) * 65793;
+
+         pixel[0] = (uint8_t)(r * alpha + pixel[0] * nalpha) >> 16;
+         pixel[1] = (uint8_t)(g * alpha + pixel[1] * nalpha) >> 16;
+         pixel[2] = (uint8_t)(b * alpha + pixel[2] * nalpha) >> 16;
       }
    }
 }
@@ -52,14 +55,13 @@ void set_pixel(uint16_t x, uint16_t y, uint8_t r, uint8_t g, uint8_t b, uint8_t 
 void update_pixels()
 {
    static int frame = 0;
-   int x, y, r, g, b;
 
    if (frame % 4 == 0)
    {
       // fade out
-      for (y = 0; y < PIXEL_HEIGHT; y++)
+      for (int y = 0; y < PIXEL_HEIGHT; y++)
       {
-         for (x = 0; x < PIXEL_WIDTH; x++)
+         for (int x = 0; x < PIXEL_WIDTH; x++)
          {
             uint8_t *pixel = ((uint8_t*)pixels) + (y * PIXEL_WIDTH + x) * bytesPerPixel; // RGB(A)
             pixel[0] = pixel[0] ? pixel[0] - 1 : pixel[0];
@@ -67,14 +69,14 @@ void update_pixels()
             pixel[2] = pixel[2] ? pixel[2] - 1 : pixel[2];
          }
       }
-      
+
       // update histogram
-      for (r = 0; r < 8; r++)
-         for (g = 0; g < 8; g++)
-            for (b = 0; b < 8; b++)
+      for (int r = 0; r < 8; r++)
+         for (int g = 0; g < 8; g++)
+            for (int b = 0; b < 8; b++)
                histogram[r][g][b] *= 0.99;
    }
-   
+
    frame++;
 }
 
@@ -132,11 +134,10 @@ void * handle_client(void *s){
    int32_t offset_x = 0, offset_y = 0;
    while(running && (read_size = recv(sock , buf + read_pos, sizeof(buf) - read_pos , 0)) > 0){
       read_pos += read_size;
-      int found = 1;
-      while (found){
+      int found;
+      do{
          found = 0;
-         int i;
-         for (i = 0; i < read_pos; i++){
+         for (int i = 0; i < read_pos; i++){
             if (buf[i] == '\n'){
                buf[i] = 0;
                if(!strncmp(buf, "PX ", 3)){ // ...don't ask :D...
@@ -149,7 +150,7 @@ void * handle_client(void *s){
                      if(pos1 != pos2){
                         x += offset_x;
                         y += offset_y;
-                         
+
                         pos2++;
                         pos1 = pos2;
                         c = strtoul(pos2, &pos1, 16);
@@ -234,6 +235,7 @@ void * handle_client(void *s){
                   for (j = 0; j < i; j++)
                      printf("%c", buf[j]);
                   printf("\n");*/
+                  break;
                }
                int offset = i + 1;
                int count = read_pos - offset;
@@ -249,8 +251,9 @@ void * handle_client(void *s){
             //printf("BULLSHIT BUFFER: %s\n", buf);
             read_pos = 0;
          }
-      }
+      }while (found);
    }
+
 disconnect:
    close(sock);
    //printf("Client disconnected\n");
@@ -268,9 +271,9 @@ void * handle_clients(void * foobar){
    struct sockaddr_in addr;
    addr_len = sizeof(addr);
    struct timeval tv;
-   
+
    printf("Starting Server...\n");
-   
+
    server_sock = socket(PF_INET, SOCK_STREAM, 0);
 
    tv.tv_sec = 5;
@@ -279,12 +282,12 @@ void * handle_clients(void * foobar){
    addr.sin_addr.s_addr = INADDR_ANY;
    addr.sin_port = htons(PORT);
    addr.sin_family = AF_INET;
-   
+
    if (server_sock == -1){
       perror("socket() failed");
       return 0;
    }
-   
+
    if (setsockopt(server_sock, SOL_SOCKET, SO_REUSEADDR, &(int){ 1 }, sizeof(int)) < 0)
       printf("setsockopt(SO_REUSEADDR) failed\n");
    if (setsockopt(server_sock, SOL_SOCKET, SO_REUSEPORT, &(int){ 1 }, sizeof(int)) < 0)
@@ -303,7 +306,7 @@ void * handle_clients(void * foobar){
       return 0;
    }
    printf("Listening...\n");
-   
+
    setsockopt(server_sock, SOL_SOCKET, SO_SNDTIMEO, (char *)&tv,sizeof(struct timeval));
    setsockopt(server_sock, SOL_SOCKET, SO_RCVTIMEO, (char *)&tv,sizeof(struct timeval));
 
@@ -334,6 +337,13 @@ void * handle_udp(void * foobar){
    if (setsockopt(s, SOL_SOCKET, SO_REUSEADDR, &(int){ 1 }, sizeof(int)) < 0)
       printf("udp setsockopt(SO_REUSEADDR) failed\n");
 
+   struct timeval tv;
+   tv.tv_sec = 5;
+   tv.tv_usec = 0;
+   if (setsockopt(s, SOL_SOCKET, SO_RCVTIMEO,&tv,sizeof(tv)) < 0) {
+      printf("Error setting socket timeout\n");
+   }
+
    struct sockaddr_in si_me = {0};
    si_me.sin_family = AF_INET;
    si_me.sin_port = htons(PORT);
@@ -348,8 +358,9 @@ void * handle_udp(void * foobar){
       uint8_t buf[UDP_BUFFER_SIZE];
       int n = recv(s, buf, UDP_BUFFER_SIZE, 0);
       if (n < 0){
-         perror("udp recv() failed");
-         return 0;
+         if(errno != EAGAIN)
+            perror("udp recv() failed");
+         continue;
       }
       if (n > 6)
       {
@@ -363,8 +374,7 @@ void * handle_udp(void * foobar){
             {
                int linePixelCount = pixelCount > stride ? stride : pixelCount;
                uint8_t *pixel = pixels + (y * PIXEL_WIDTH + x) * bytesPerPixel;
-               int i;
-               for (i = 0; i < linePixelCount; i++)
+               for (int i = 0; i < linePixelCount; i++)
                {
                   pixel[0] = data[0];
                   pixel[1] = data[1];
@@ -409,11 +419,17 @@ int server_start()
 void server_stop()
 {
    running = 0;
-   printf("Shutting Down...\n");
-   //while (client_thread_count)
-   //   usleep(100000);
+   printf("Shutting Down %d childs ...\n", client_thread_count);
+   while (client_thread_count)
+      usleep(100000);
+   printf("Shutting Down socket ...\n");
    close(server_sock);
-   //pthread_join(thread_id, NULL);
-   //pthread_join(udp_thread_id, NULL);
+   printf("Joining threads ... ");
+   printf("TCP ... ");
+   pthread_join(thread_id, NULL);
+   printf("UDP ... ");
+   pthread_join(udp_thread_id, NULL);
+   printf("done\n");
+   printf("Cleaning memory\n");
    free(pixels);
 }
