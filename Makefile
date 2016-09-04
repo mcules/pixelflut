@@ -29,8 +29,8 @@ main_pi.o: main_pi.c
 
 
 
-LDFLAGS_SDL = `pkg-config --libs sdl2` -lm -lpthread -O3
-CFLAGS_SDL = -Wall -c `pkg-config --cflags sdl2` -Wall -O3
+LDFLAGS_SDL = `pkg-config --libs sdl2` -lm -lpthread -O3 -fsanitize=address -g -fno-omit-frame-pointer
+CFLAGS_SDL = -Wall -Wextra -Werror -pedantic -std=c11 -c `pkg-config --cflags sdl2` -Wall -O3 -fsanitize=address -g -fno-omit-frame-pointer
 
 sdl: $(EXE_SDL)
 
