@@ -74,7 +74,7 @@ void update_pixels()
             pixel[0] = pixel[0] ? pixel[0] - 1 : pixel[0];
             pixel[1] = pixel[1] ? pixel[1] - 1 : pixel[1];
             pixel[2] = pixel[2] ? pixel[2] - 1 : pixel[2];
-            pixel += PIXEL_WIDTH;
+            pixel += bytesPerPixel;
          }
       }
 #endif
