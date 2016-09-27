@@ -21,11 +21,13 @@ static uint8_t* pixels;
 static volatile int running = 1;
 static volatile int client_thread_count;
 static volatile int server_sock;
-static volatile unsigned int histogram[8][8][8];
 static volatile unsigned int total;
 
+#if SERVE_HISTOGRAM
+static volatile unsigned int histogram[8][8][8];
 static uint8_t* index_html = 0;
 static int index_html_len = 0;
+#endif
 
 void * handle_client(void *);
 void * handle_clients(void *);
@@ -34,7 +36,11 @@ void set_pixel(uint16_t x, uint16_t y, uint8_t r, uint8_t g, uint8_t b, uint8_t 
 {
    if(x < PIXEL_WIDTH && y < PIXEL_HEIGHT){
       uint8_t *pixel = ((uint8_t*)pixels) + (y * PIXEL_WIDTH + x) * bytesPerPixel; // RGB(A)
+
+#if SERVE_HISTOGRAM
       histogram[r >> 5][g >> 5][b >> 5]++; // color statistics
+#endif
+
       total++;
       if(a == 255){ // fast & usual path
          pixel[0] = r;
@@ -58,28 +64,34 @@ void update_pixels()
 
    if (frame % 4 == 0)
    {
+#if FADE_OUT
       // fade out
       for (int y = 0; y < PIXEL_HEIGHT; y++)
       {
+         uint8_t *pixel = ((uint8_t*)pixels) + y * PIXEL_WIDTH * bytesPerPixel; // RGB(A)
          for (int x = 0; x < PIXEL_WIDTH; x++)
          {
-            uint8_t *pixel = ((uint8_t*)pixels) + (y * PIXEL_WIDTH + x) * bytesPerPixel; // RGB(A)
             pixel[0] = pixel[0] ? pixel[0] - 1 : pixel[0];
             pixel[1] = pixel[1] ? pixel[1] - 1 : pixel[1];
             pixel[2] = pixel[2] ? pixel[2] - 1 : pixel[2];
+            pixel += PIXEL_WIDTH;
          }
       }
+#endif
 
+#if SERVE_HISTOGRAM
       // update histogram
       for (int r = 0; r < 8; r++)
          for (int g = 0; g < 8; g++)
             for (int b = 0; b < 8; b++)
                histogram[r][g][b] *= 0.99;
+#endif
    }
 
    frame++;
 }
 
+#if SERVE_HISTOGRAM
 static void loadIndexHtml()
 {
    const char http_ok[] = "HTTP/1.1 200 OK\r\n\r\n";
@@ -102,6 +114,7 @@ static void loadIndexHtml()
       fprintf(stderr, "Could not read index.html!\n");
    fclose(file);
 }
+#endif
 
 char * itoa(int n, char *s)
 {
@@ -130,7 +143,10 @@ void * handle_client(void *s){
    int sock = *(int*)s;
    char buf[BUFSIZE];
    int read_size, read_pos = 0;
-   uint32_t x,y,c, hi;
+   uint32_t x,y,c;
+#if SERVE_HISTOGRAM
+   uint32_t hi;
+#endif
    int32_t offset_x = 0, offset_y = 0;
    while(running && (read_size = recv(sock , buf + read_pos, sizeof(buf) - read_pos , 0)) > 0){
       read_pos += read_size;
@@ -208,6 +224,7 @@ void * handle_client(void *s){
                      "request this help message: 'HELP\\n';\n";
                   send(sock, out, sizeof(out) - 1, MSG_DONTWAIT | MSG_NOSIGNAL);
                }
+#if SERVE_HISTOGRAM
                else if(!strncmp(buf, "GET", 3)){ // obviously totally HTTP compliant!
                   char out[16384];
                   if (!strncmp(buf + 4, "/data.json", 10)){
@@ -223,12 +240,13 @@ void * handle_client(void *s){
                      send(sock, out, strlen(out), MSG_DONTWAIT | MSG_NOSIGNAL);
                   }
                   else{
-                     free(index_html);
-                     loadIndexHtml(); // debug
+                     //free(index_html);
+                     //loadIndexHtml(); // debug
                      send(sock, index_html, index_html_len, MSG_DONTWAIT | MSG_NOSIGNAL);
                   }
                   goto disconnect;
                }
+#endif
                else{
                   /*printf("BULLSHIT[%i]: ", i);
                   int j;
@@ -254,7 +272,10 @@ void * handle_client(void *s){
       }while (found);
    }
 
+#if SERVE_HISTOGRAM
 disconnect:
+#endif
+
    close(sock);
    //printf("Client disconnected\n");
    fflush(stdout);
@@ -276,7 +297,7 @@ void * handle_clients(void * foobar){
 
    server_sock = socket(PF_INET, SOCK_STREAM, 0);
 
-   tv.tv_sec = 5;
+   tv.tv_sec = CONNECTION_TIMEOUT;
    tv.tv_usec = 0;
 
    addr.sin_addr.s_addr = INADDR_ANY;
@@ -301,7 +322,7 @@ void * handle_clients(void * foobar){
    if (retries == 10)
       return 0;
 
-   if (listen(server_sock, 32) == -1){
+   if (listen(server_sock, 4) == -1){
       perror("listen() failed");
       return 0;
    }
@@ -325,6 +346,7 @@ void * handle_clients(void * foobar){
    return 0;
 }
 
+#if UDP_PROTOCOL
 void * handle_udp(void * foobar){
    (void)foobar;
 
@@ -338,7 +360,7 @@ void * handle_udp(void * foobar){
       printf("udp setsockopt(SO_REUSEADDR) failed\n");
 
    struct timeval tv;
-   tv.tv_sec = 5;
+   tv.tv_sec = CONNECTION_TIMEOUT;
    tv.tv_usec = 0;
    if (setsockopt(s, SOL_SOCKET, SO_RCVTIMEO,&tv,sizeof(tv)) < 0) {
       printf("Error setting socket timeout\n");
@@ -391,11 +413,15 @@ void * handle_udp(void * foobar){
    return 0;
 }
 
-pthread_t thread_id;
 pthread_t udp_thread_id;
+#endif
+
+pthread_t thread_id;
 int server_start()
 {
+#if SERVE_HISTOGRAM
    loadIndexHtml();
+#endif
 
    pixels = calloc(PIXEL_WIDTH * PIXEL_HEIGHT, bytesPerPixel);
 
@@ -406,12 +432,14 @@ int server_start()
       return 0;
    }
 
+#if UDP_PROTOCOL
    if(pthread_create(&udp_thread_id , NULL, handle_udp , NULL) < 0){
       perror("could not create udp thread");
       running = 0;
       free(pixels);
       return 0;
    }
+#endif
 
    return 1;
 }
@@ -424,12 +452,21 @@ void server_stop()
       usleep(100000);
    printf("Shutting Down socket ...\n");
    close(server_sock);
+
    printf("Joining threads ... ");
    printf("TCP ... ");
    pthread_join(thread_id, NULL);
+
+#if UDP_PROTOCOL
    printf("UDP ... ");
    pthread_join(udp_thread_id, NULL);
+#endif
+
    printf("done\n");
    printf("Cleaning memory\n");
    free(pixels);
+
+#if SERVE_HISTOGRAM
+   free(index_html);
+#endif
 }
