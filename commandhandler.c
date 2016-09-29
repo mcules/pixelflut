@@ -123,9 +123,10 @@ static command_status_t command_handler(client_connection_t *client, const char 
 			char out[16384];
 			strcpy(out, "HTTP/1.1 200 OK\r\n\r\n[");
 			char *hp = out + sizeof("HTTP/1.1 200 OK\r\n\r\n[") - 1;
+			uint32_t *buckets = server->histogram.buckets[0][0];
 			for (uint32_t hi = 0; hi < 8 * 8 * 8; hi++)
 			{
-				hp = itoa(server->histogram.buckets[0][0][hi], hp);
+				hp = itoa(buckets[hi], hp);
 				*hp++ = ',';
 			}
 			hp[-1] = ']';
