@@ -1,7 +1,7 @@
 typedef int command_status_t;
 #define COMMAND_SUCCESS 0 // keeps connection alive for further commands
-#define COMMAND_ERROR   1 // closes connection due to an error
-#define COMMAND_CLOSE   2 // closes connection (after http response etc.)
+#define COMMAND_ERROR   1 // can close connection in case of errors
+#define COMMAND_CLOSE   2 // always closes connection (after http response etc.)
 
 static inline char * itoa(int n, char *s)
 {

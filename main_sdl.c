@@ -26,11 +26,11 @@ int main()
 		return 1;
 	}
 	
-	server_t server = {0};
+	server_t *server = calloc(1, sizeof(server_t));
 	server_flags_t flags = SERVER_NONE;
 	flags |= FADE_OUT ? SERVER_FADE_OUT_ENABLED : 0;
 	flags |= SERVE_HISTOGRAM ? SERVER_HISTOGRAM_ENABLED : 0;
-	if (!server_start(&server, PIXEL_WIDTH, PIXEL_HEIGHT, 4, CONNECTION_TIMEOUT, flags))
+	if (!server_start(server, PIXEL_WIDTH, PIXEL_HEIGHT, 4, CONNECTION_TIMEOUT, 2, flags))
 	{
 		SDL_Quit();
 		return 1;
@@ -38,9 +38,9 @@ int main()
 
 	while(42)
 	{
-		server_update(&server);
-		SDL_UpdateTexture(sdlTexture, NULL, server.framebuffer.pixels,
-			server.framebuffer.width * server.framebuffer.bytesPerPixel);
+		server_update(server);
+		SDL_UpdateTexture(sdlTexture, NULL, server->framebuffer.pixels,
+			server->framebuffer.width * server->framebuffer.bytesPerPixel);
 		SDL_RenderCopy(renderer, sdlTexture, NULL, NULL);
 		SDL_RenderPresent(renderer);
 		SDL_Event event;
@@ -67,7 +67,8 @@ int main()
 		}
 	}
 
-	server_stop(&server);
+	server_stop(server);
+	free(server);
 
 	SDL_DestroyWindow(window);
 	SDL_Quit();

@@ -20,10 +20,10 @@ typedef struct server_t server_t;
 typedef struct
 {
 	server_t *server;
-	pthread_t thread;
 	int socket;
+	atomic_bool lock;
+
 	int offset_x, offset_y;
-	
 	int buffer_used;
 	char buffer[2048];
 } client_connection_t;
@@ -33,6 +33,7 @@ typedef int server_flags_t;
 #define SERVER_FADE_OUT_ENABLED  1
 #define SERVER_HISTOGRAM_ENABLED 2
 
+#define MAX_CONNECTIONS 4096
 struct server_t
 {
 	framebuffer_t framebuffer;
@@ -40,39 +41,39 @@ struct server_t
 
 	int socket;
 	int timeout;
-	volatile int running;
+	int threads;
 	server_flags_t flags;
+	volatile int running;
 	int frame;
-	pthread_t thread;
-	//pthread_t *threads; // TODO
-	//client_connection_t *connections; // TODO
+	pthread_t listen_thread;
+	pthread_t *client_threads;
+	client_connection_t connections[MAX_CONNECTIONS];
 	atomic_uint connection_count;
+	atomic_uint connection_current;
 };
 
 #include "commandhandler.c"
 
-static void server_update(server_t *server)
+static void server_client_disconnect(client_connection_t *client)
 {
-	if (server->frame % 4 == 0)
-	{
-		if (server->flags & SERVER_FADE_OUT_ENABLED)
-			framebuffer_fade_out(&server->framebuffer);
-		if (server->flags & SERVER_HISTOGRAM_ENABLED)
-			histogram_update(&server->histogram);
-	}
-
-	server->frame++;
+	int socket = client->socket;
+	client->socket = 0;
+	client->offset_x = 0;
+	client->offset_y = 0;
+	client->buffer_used = 0;
+	close(socket);
+	atomic_fetch_add(&client->server->connection_count, -1);
+	//printf("Client disconnected\n");
 }
 
-static void *server_client_thread(void *param)
+static void server_poll_client_connection(client_connection_t *client)
 {
-	client_connection_t *client = (client_connection_t*)param;
-	server_t *server = client->server;
-	atomic_fetch_add(&server->connection_count, 1);
+	// TODO: disconnect on timeout does not work with nonblocking recv!?
 	int read_size;
-	while(server->running && (read_size = recv(client->socket, client->buffer + client->buffer_used, sizeof(client->buffer) - client->buffer_used , 0)) > 0)
+	if((read_size = recv(client->socket, client->buffer + client->buffer_used, sizeof(client->buffer) - client->buffer_used , MSG_DONTWAIT)) > 0)
 	{
 		client->buffer_used += read_size;
+
 		char *start, *end;
 		start = end = client->buffer;
 		while (end < client->buffer + client->buffer_used)
@@ -81,24 +82,60 @@ static void *server_client_thread(void *param)
 			{
 				*end = 0;
 				command_status_t status = command_handler(client, start);
-				if (status != COMMAND_SUCCESS)
-					goto disconnect;
+				if (status == COMMAND_CLOSE)
+				{
+					//printf("server closed connection\n");
+					server_client_disconnect(client);
+					return;
+				}
 				start = end + 1;
 			}
 			end++;
 		}
 
 		int offset = start - client->buffer;
-		int count = end - start;
-		if (offset > 0 && count > 0)
+		int count = client->buffer_used - offset;
+		if (count == client->buffer_used || offset == client->buffer_used)
+			client->buffer_used = 0;
+		else if (offset > 0 && count > 0)
+		{
 			memmove(client->buffer, start, count);
-		client->buffer_used -= offset;
+			client->buffer_used -= offset;
+		}
 	}
+	else if (read_size == 0) // = disconnected
+	{
+		//printf("client closed connection\n");
+		server_client_disconnect(client);
+	}
+	else if (errno != EAGAIN)
+	{
+		fprintf(stderr, "client recv error: %d on socket %d\n", errno, client->socket);
+	}
+}
 
-disconnect:
-	close(client->socket);
-	free(client);
-	atomic_fetch_add(&server->connection_count, -1);
+static void *server_client_thread(void *param)
+{
+	server_t *server = (server_t*)param;
+	while(server->running || server->connection_count)
+	{
+		unsigned int index = server->connection_current;
+		while (!atomic_compare_exchange_weak(&server->connection_current, &index, index + 1))
+			index = server->connection_current;
+		
+		client_connection_t *client = server->connections + index % MAX_CONNECTIONS;
+		if (!atomic_flag_test_and_set(&client->lock))
+		{
+			if (client->socket)
+			{
+				if (server->running)
+					server_poll_client_connection(client);
+				else
+					server_client_disconnect(client);
+			}
+			atomic_flag_clear(&client->lock);
+		}
+	}
 	return 0;
 }
 
@@ -141,7 +178,7 @@ static void *server_listen_thread(void *param)
 	if (retries == 10)
 		return 0;
 
-	if (listen(server->socket, 4) == -1)
+	if (listen(server->socket, 32) == -1)
 	{
 		perror("listen() failed");
 		return 0;
@@ -153,17 +190,19 @@ static void *server_listen_thread(void *param)
 
 	while (server->running)
 	{
-		client_connection_t *client = calloc(1, sizeof(client_connection_t));
-		client->server = server;
-		client->socket = accept(server->socket, (struct sockaddr*)&addr, &addr_len);
-		if (client->socket > 0)
+		for (int i = 0; i < MAX_CONNECTIONS && server->running; i++)
 		{
-			//printf("Client %s connected\n", inet_ntoa(addr.sin_addr));
-			if (pthread_create(&client->thread, NULL, server_client_thread, client) < 0)
+			if (!server->connections[i].socket)
 			{
-				close(client->socket);
-				free(client);
-				perror("could not create thread");
+				client_connection_t *client = server->connections + i;
+				client->server = server;
+				int client_socket = accept(server->socket, (struct sockaddr*)&addr, &addr_len);
+				if (client_socket > 0)
+				{
+					client->socket = client_socket;
+					atomic_fetch_add(&server->connection_count, 1);
+					//printf("Client %s connected\n", inet_ntoa(addr.sin_addr));
+				}
 			}
 		}
 	}
@@ -176,12 +215,13 @@ static void *server_listen_thread(void *param)
 static int server_start(
 	server_t *server,
 	int width, int height, int bytesPerPixel,
-	int timeout, server_flags_t flags)
+	int timeout, int threads, server_flags_t flags)
 {
 	server->socket = 0;
 	server->timeout = timeout;
-	server->running = 1;
+	server->threads = threads;
 	server->flags = flags;
+	server->running = 1;
 	server->frame = 0;
 
 	framebuffer_init(&server->framebuffer, width, height, bytesPerPixel);
@@ -189,13 +229,18 @@ static int server_start(
 	if (flags & SERVER_HISTOGRAM_ENABLED)
 		histogram_init(&server->histogram);
 
-	if (pthread_create(&server->thread, NULL, server_listen_thread, server) < 0)
+	if (pthread_create(&server->listen_thread, NULL, server_listen_thread, server) < 0)
 	{
-		perror("could not create tcp thread");
+		perror("could not create listen thread");
 		server->running = 0;
 		framebuffer_free(&server->framebuffer);
 		return 0;
 	}
+	
+	server->client_threads = calloc(threads, sizeof(pthread_t));
+	for (int i = 0; i < threads; i++)
+		if (pthread_create(&server->client_threads[i], NULL, server_client_thread, server) < 0)
+			perror("could not create client thread");
 
 	return 1;
 }
@@ -203,14 +248,17 @@ static int server_start(
 static void server_stop(server_t *server)
 {
 	server->running = 0;
-	printf("Shutting Down %d childs ...\n", server->connection_count);
-	while (server->connection_count)
-		usleep(100000);
-	printf("Shutting Down socket ...\n");
 	close(server->socket);
 
+	printf("Closing %d client connections ...\n", server->connection_count);
+	while (server->connection_count)
+		usleep(100000);
+
 	printf("Joining threads ... ");
-	pthread_join(server->thread, NULL);
+	pthread_join(server->listen_thread, NULL);
+	for (int i = 0; i < server->threads; i++)
+		pthread_join(server->client_threads[i], NULL);
+	free(server->client_threads);
 
 	printf("Destroying framebuffer...\n");
 	framebuffer_free(&server->framebuffer);
@@ -220,4 +268,17 @@ static void server_stop(server_t *server)
 		printf("Destroying histogram...\n");
 		histogram_free(&server->histogram);
 	}
+}
+
+static void server_update(server_t *server)
+{
+	if (server->frame % 4 == 0)
+	{
+		if (server->flags & SERVER_FADE_OUT_ENABLED)
+			framebuffer_fade_out(&server->framebuffer);
+		if (server->flags & SERVER_HISTOGRAM_ENABLED)
+			histogram_update(&server->histogram);
+	}
+
+	server->frame++;
 }
