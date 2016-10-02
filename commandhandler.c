@@ -112,8 +112,8 @@ static command_status_t command_handler(client_connection_t *client, const char 
 	{
 		static const char out[] =
 			"send pixel: 'PX {x} {y} {GG or RRGGBB or RRGGBBAA as HEX}\\n'; "
+			"set offset for future pixels: 'OFFSET {x} {y}\\n'; "
 			"request pixel: 'PX {x} {y}\\n'; "
-			"set drawing offset: 'OFFSET {x} {y}\\n'; "
 			"request resolution: 'SIZE\\n'; "
 			"request client connection count: 'CONNECTIONS\\n'; "
 			"request this help message: 'HELP\\n';\n";
