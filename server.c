@@ -120,7 +120,7 @@ static void server_poll_client_connection(client_connection_t *client)
 		//printf("client closed connection\n");
 		server_client_disconnect(client);
 	}
-	else if (errno != EAGAIN)
+	else if (errno != EAGAIN && errno != ECONNRESET)
 	{
 		fprintf(stderr, "client recv error: %d on socket %d\n", errno, client->socket);
 	}
