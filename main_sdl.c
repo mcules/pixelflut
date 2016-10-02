@@ -30,15 +30,39 @@ int main()
 	server_flags_t flags = SERVER_NONE;
 	flags |= FADE_OUT ? SERVER_FADE_OUT_ENABLED : 0;
 	flags |= SERVE_HISTOGRAM ? SERVER_HISTOGRAM_ENABLED : 0;
-	if (!server_start(server, PIXEL_WIDTH, PIXEL_HEIGHT, 4, CONNECTION_TIMEOUT, 2, flags))
+	if (!server_start(server, PORT, PIXEL_WIDTH, PIXEL_HEIGHT, 4, CONNECTION_TIMEOUT, 2, flags, 4))
 	{
 		SDL_Quit();
 		return 1;
 	}
+	
+	char *text_additional = "echo \"PX <X> <Y> <RRGGBB>\\n\" > nc " str(HOST) " " str(PORT);
+	if (SERVE_HISTOGRAM)
+		text_additional = "http://" str(HOST) ":" str(PORT);
+	int text_position[2] = { 32, PIXEL_HEIGHT - 64 };
+	int text_size = 14;
+	uint8_t text_color[3] = { 255, 255, 255 };
+	uint8_t text_bgcolor[4] = { 32, 32, 32, 255 };
 
 	while(42)
 	{
 		server_update(server);
+
+		framebuffer_write_text_with_background(
+			&server->framebuffer,
+			text_position[0], text_position[1], text_additional, text_size,
+			text_color[0], text_color[1], text_color[2],
+			text_bgcolor[0], text_bgcolor[1], text_bgcolor[2], text_bgcolor[3]);
+		
+		char text[1024];
+		sprintf(text, "connections: %4u; pixels: %10" PRId64 "; p/s: %8u",
+			server->connection_count, server->total_pixels_received, server->pixels_received_per_second);
+		framebuffer_write_text_with_background(
+			&server->framebuffer,
+			text_position[0], text_position[1] + text_size, text, text_size,
+			text_color[0], text_color[1], text_color[2],
+			text_bgcolor[0], text_bgcolor[1], text_bgcolor[2], text_bgcolor[3]);
+		
 		SDL_UpdateTexture(sdlTexture, NULL, server->framebuffer.pixels,
 			server->framebuffer.width * server->framebuffer.bytesPerPixel);
 		SDL_RenderCopy(renderer, sdlTexture, NULL, NULL);

@@ -11,9 +11,13 @@
 #include <pthread.h>
 #include <errno.h>
 #include <stdatomic.h>
+#include <time.h>
 
 #include "framebuffer.c"
 #include "histogram.c"
+
+#define str(a) xstr(a)
+#define xstr(a) #a
 
 typedef struct server_t server_t;
 
@@ -39,17 +43,25 @@ struct server_t
 	framebuffer_t framebuffer;
 	histogram_t histogram;
 
+	uint16_t port;
 	int socket;
 	int timeout;
 	int threads;
 	server_flags_t flags;
+	int fade_interval;
+	
 	volatile int running;
 	int frame;
+	uint32_t pixels_received_per_second;
+	struct timespec prev_second;
+	
 	pthread_t listen_thread;
 	pthread_t *client_threads;
 	client_connection_t connections[MAX_CONNECTIONS];
 	atomic_uint connection_count;
 	atomic_uint connection_current;
+	atomic_uint pixels_per_second_counter;
+	atomic_uint_fast64_t total_pixels_received;
 };
 
 #include "commandhandler.c"
@@ -155,7 +167,7 @@ static void *server_listen_thread(void *param)
 	tv.tv_usec = 0;
 
 	addr.sin_addr.s_addr = INADDR_ANY;
-	addr.sin_port = htons(PORT);
+	addr.sin_port = htons(server->port);
 	addr.sin_family = AF_INET;
 
 	if (server->socket == -1)
@@ -213,16 +225,21 @@ static void *server_listen_thread(void *param)
 }
 
 static int server_start(
-	server_t *server,
+	server_t *server, uint16_t port,
 	int width, int height, int bytesPerPixel,
-	int timeout, int threads, server_flags_t flags)
+	int timeout, int threads, server_flags_t flags,
+	int fade_interval)
 {
+	server->port = port;
 	server->socket = 0;
 	server->timeout = timeout;
 	server->threads = threads;
 	server->flags = flags;
+	server->fade_interval = fade_interval;
 	server->running = 1;
 	server->frame = 0;
+	
+	assert(fade_interval > 0);
 
 	framebuffer_init(&server->framebuffer, width, height, bytesPerPixel);
 	
@@ -241,6 +258,8 @@ static int server_start(
 	for (int i = 0; i < threads; i++)
 		if (pthread_create(&server->client_threads[i], NULL, server_client_thread, server) < 0)
 			perror("could not create client thread");
+
+	clock_gettime(CLOCK_MONOTONIC, &server->prev_second);
 
 	return 1;
 }
@@ -272,12 +291,24 @@ static void server_stop(server_t *server)
 
 static void server_update(server_t *server)
 {
-	if (server->frame % 4 == 0)
+	if (server->frame % server->fade_interval == 0)
 	{
 		if (server->flags & SERVER_FADE_OUT_ENABLED)
 			framebuffer_fade_out(&server->framebuffer);
 		if (server->flags & SERVER_HISTOGRAM_ENABLED)
 			histogram_update(&server->histogram);
+	}
+	
+	struct timespec time;
+	clock_gettime(CLOCK_MONOTONIC, &time);
+	float delta = (float)((double)(time.tv_sec - server->prev_second.tv_sec) + 0.000000001 * (double)(time.tv_nsec - server->prev_second.tv_nsec));
+	if (delta >= 1.0f)
+	{
+		server->prev_second = time;
+		uint32_t pixels_per_second_counter = server->pixels_per_second_counter;
+		while (!atomic_compare_exchange_weak(&server->pixels_per_second_counter, &pixels_per_second_counter, 0))
+			pixels_per_second_counter = server->pixels_per_second_counter;
+		server->pixels_received_per_second = pixels_per_second_counter;
 	}
 
 	server->frame++;

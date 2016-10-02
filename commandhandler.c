@@ -79,6 +79,10 @@ static command_status_t command_handler(client_connection_t *client, const char 
 			pixel[1] = (uint8_t)(g * alpha + pixel[1] * nalpha) >> 16;
 			pixel[2] = (uint8_t)(b * alpha + pixel[2] * nalpha) >> 16;
 		}
+		
+		atomic_fetch_add(&server->total_pixels_received, 1);
+		atomic_fetch_add(&server->pixels_per_second_counter, 1);
+		
 		return COMMAND_SUCCESS;
 	}
 	else if(!strncmp(cmd, "OFFSET ", 7))
