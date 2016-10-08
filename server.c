@@ -86,11 +86,13 @@ static void server_client_disconnect(client_connection_t *client)
 
 static void server_poll_client_connection(client_connection_t *client)
 {
-	rmt_BeginCPUSample(server_poll_client_connection, 0);
+	rmt_BeginCPUSample(poll, 0);
 
 	// TODO: disconnect on timeout does not work with nonblocking recv!?
-	int read_size;
-	if((read_size = recv(client->socket, client->buffer + client->buffer_used, sizeof(client->buffer) - client->buffer_used , MSG_DONTWAIT)) > 0)
+	rmt_BeginCPUSample(recv, 0);
+	int read_size = recv(client->socket, client->buffer + client->buffer_used, sizeof(client->buffer) - client->buffer_used , MSG_DONTWAIT);
+	rmt_EndCPUSample();
+	if(read_size > 0)
 	{
 		client->buffer_used += read_size;
 
@@ -101,7 +103,9 @@ static void server_poll_client_connection(client_connection_t *client)
 			if (*end == '\n')
 			{
 				*end = 0;
+				rmt_BeginCPUSample(cmd_handler, 0);
 				command_status_t status = command_handler(client, start);
+				rmt_EndCPUSample();
 				if (status == COMMAND_CLOSE)
 				{
 					//printf("server closed connection\n");
@@ -120,7 +124,9 @@ static void server_poll_client_connection(client_connection_t *client)
 			client->buffer_used = 0;
 		else if (offset > 0 && count > 0)
 		{
+			rmt_BeginCPUSample(memmove, 0);
 			memmove(client->buffer, start, count);
+			rmt_EndCPUSample();
 			client->buffer_used -= offset;
 		}
 	}
@@ -262,7 +268,7 @@ static int server_start(
 	
 	rmt_CreateGlobalInstance(&server->remotery);
 	//rmt_BindOpenGL();
-	rmt_SetCurrentThreadName("render thread");
+	//rmt_SetCurrentThreadName("render thread");
 
 	framebuffer_init(&server->framebuffer, width, height, bytesPerPixel);
 	
