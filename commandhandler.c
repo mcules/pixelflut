@@ -48,8 +48,21 @@ static command_status_t command_handler(client_connection_t *client, const char 
 		}
 		pos1 = ++pos2;
 		
-		// TODO: manual color code parsing!
-		uint32_t c = strtoul(pos2, (char**)&pos1, 16);
+		uint32_t c = 0;
+		pos1 = pos2;
+		for (int i = 0; i < 8; i++)
+		{
+			if (*pos1 >= '0' && *pos1 <= '9')
+				c = c << 4 | (*pos1 - '0');
+			else if (*pos1 >= 'a' && *pos1 <= 'f')
+				c = c << 4 | (*pos1 - 'a' + 10);
+			else if (*pos1 >= 'A' && *pos1 <= 'A')
+				c = c << 4 | (*pos1 - 'A' + 10);
+			else
+				break;
+			pos1++;
+		}
+		//uint32_t c = strtoul(pos2, (char**)&pos1, 16);
 		if (pos2 == pos1) // no color specified -> color request
 		{
 			char colorout[30]; // TODO: fix pixel addr/write
