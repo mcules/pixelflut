@@ -26,18 +26,36 @@ static inline char * itoa(int n, char *s)
 	return s + l;
 }
 
-static command_status_t command_handler(client_connection_t *client, const char *cmd)
+static inline int atoi_simple(char *str, char **next)
+{
+	int res = 0;
+	int sign = 1;
+	if (*str == '-')
+	{
+		sign = -1;
+		++str;
+	}
+	while (*str >= '0' && *str <= '9')
+	{
+		res = res * 10 + (*str - '0');
+		++str;
+	}
+	*next = str;
+	return sign * res;
+}
+
+static command_status_t command_handler(client_connection_t *client, char *cmd)
 {
 	server_t *server = client->server;
 	framebuffer_t *framebuffer = &server->framebuffer;
 	if(cmd[0] == 'P' && cmd[1] == 'X' && cmd[2] == ' ')
 	{
 		rmt_BeginCPUSample(px_decode, RMTSF_Aggregate);
-		const char *pos1 = cmd + 3;
-		int x = strtol(cmd + 3, (char**)&pos1, 10);
+		char *pos1 = cmd + 3;
+		int x = atoi_simple(cmd + 3, (char**)&pos1);
 		if (cmd == pos1) { rmt_EndCPUSample(); return COMMAND_ERROR; }
-		const char *pos2 = ++pos1;
-		int y = strtol(pos1, (char**)&pos2, 10);
+		char *pos2 = ++pos1;
+		int y = atoi_simple(pos1, (char**)&pos2);
 		if (pos1 == pos2) { rmt_EndCPUSample(); return COMMAND_ERROR; }
 		x += client->offset_x;
 		y += client->offset_y;
@@ -62,7 +80,6 @@ static command_status_t command_handler(client_connection_t *client, const char 
 				break;
 			pos1++;
 		}
-		//uint32_t c = strtoul(pos2, (char**)&pos1, 16);
 		if (pos2 == pos1) // no color specified -> color request
 		{
 			char colorout[30]; // TODO: fix pixel addr/write
