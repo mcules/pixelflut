@@ -28,22 +28,22 @@ static inline char * itoa(int n, char *s)
 
 static command_status_t command_handler(client_connection_t *client, const char *cmd)
 {
-	//rmt_BeginCPUSample(command_handler, 0);
 	server_t *server = client->server;
 	framebuffer_t *framebuffer = &server->framebuffer;
 	if(cmd[0] == 'P' && cmd[1] == 'X' && cmd[2] == ' ')
 	{
+		rmt_BeginCPUSample(px_decode, RMTSF_Aggregate);
 		const char *pos1 = cmd + 3;
 		int x = strtol(cmd + 3, (char**)&pos1, 10);
-		if (cmd == pos1) { /*rmt_EndCPUSample();*/ return COMMAND_ERROR; }
+		if (cmd == pos1) { rmt_EndCPUSample(); return COMMAND_ERROR; }
 		const char *pos2 = ++pos1;
 		int y = strtol(pos1, (char**)&pos2, 10);
-		if (pos1 == pos2) { /*rmt_EndCPUSample();*/ return COMMAND_ERROR; }
+		if (pos1 == pos2) { rmt_EndCPUSample(); return COMMAND_ERROR; }
 		x += client->offset_x;
 		y += client->offset_y;
 		if (x < 0 || y < 0 || x >= (int)framebuffer->width || y >= (int)framebuffer->height)
 		{
-			//rmt_EndCPUSample();
+			rmt_EndCPUSample();
 			return COMMAND_ERROR;
 		}
 		pos1 = ++pos2;
@@ -55,10 +55,12 @@ static command_status_t command_handler(client_connection_t *client, const char 
 			char colorout[30]; // TODO: fix pixel addr/write
 			snprintf(colorout, sizeof(colorout), "PX %d %d %06x\n", x, y, framebuffer->pixels[y * framebuffer->width + x] & 0xffffff);
 			send(client->socket, colorout, sizeof(colorout) - 1, MSG_DONTWAIT | MSG_NOSIGNAL);
-			//rmt_EndCPUSample();
+			rmt_EndCPUSample();
 			return COMMAND_SUCCESS;
 		}
+		rmt_EndCPUSample();
 
+		rmt_BeginCPUSample(px_write, RMTSF_Aggregate);
 		int codelen = pos1 - pos2;
 		uint8_t r, g, b, a;
 		if (codelen > 6) { r = c >> 24; g = c >> 16; b = c >> 8; a =   c; } else // rgba
@@ -88,7 +90,7 @@ static command_status_t command_handler(client_connection_t *client, const char 
 		atomic_fetch_add(&server->total_pixels_received, 1);
 		atomic_fetch_add(&server->pixels_per_second_counter, 1);
 		
-		//rmt_EndCPUSample();
+		rmt_EndCPUSample();
 		return COMMAND_SUCCESS;
 	}
 	else if(!strncmp(cmd, "OFFSET ", 7))
