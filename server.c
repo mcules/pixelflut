@@ -31,7 +31,7 @@ typedef struct
 
 	int offset_x, offset_y;
 	int buffer_used;
-	char buffer[2048];
+	char buffer[65536];
 } client_connection_t;
 
 typedef int server_flags_t;
@@ -39,7 +39,7 @@ typedef int server_flags_t;
 #define SERVER_FADE_OUT_ENABLED  1
 #define SERVER_HISTOGRAM_ENABLED 2
 
-#define MAX_CONNECTIONS 4096
+#define MAX_CONNECTIONS 16
 struct server_t
 {
 	framebuffer_t framebuffer;
@@ -146,7 +146,7 @@ static void server_poll_client_connection(client_connection_t *client)
 static void *server_client_thread(void *param)
 {
 	server_t *server = (server_t*)param;
-	rmt_SetCurrentThreadName("client thread");
+	//rmt_SetCurrentThreadName("client thread");
 	while(server->running || server->connection_count)
 	{
 		unsigned int index = server->connection_current;

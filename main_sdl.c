@@ -30,7 +30,7 @@ int main()
 	server_flags_t flags = SERVER_NONE;
 	flags |= FADE_OUT ? SERVER_FADE_OUT_ENABLED : 0;
 	flags |= SERVE_HISTOGRAM ? SERVER_HISTOGRAM_ENABLED : 0;
-	if (!server_start(server, PORT, PIXEL_WIDTH, PIXEL_HEIGHT, 4, CONNECTION_TIMEOUT, 2, flags, 4))
+	if (!server_start(server, PORT, PIXEL_WIDTH, PIXEL_HEIGHT, 4, CONNECTION_TIMEOUT, 3, flags, 4))
 	{
 		SDL_Quit();
 		return 1;
@@ -40,7 +40,7 @@ int main()
 	if (SERVE_HISTOGRAM)
 		text_additional = "http://" str(HOST) ":" str(PORT);
 	int text_position[2] = { 32, PIXEL_HEIGHT - 64 };
-	int text_size = 14;
+	int text_size = 20;
 	uint8_t text_color[3] = { 255, 255, 255 };
 	uint8_t text_bgcolor[4] = { 32, 32, 32, 255 };
 
