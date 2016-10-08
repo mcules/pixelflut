@@ -12,10 +12,12 @@ UDP_PROTOCOL = 1
 FADE_OUT = 1
 SERVE_HISTOGRAM = 1 # over http on same port
 FULLSCREEN_START = 0 # sdl only
+PROFILING = 0
 
 DEFINES = -DPIXEL_WIDTH=$(PIXEL_WIDTH) -DPIXEL_HEIGHT=$(PIXEL_HEIGHT) -DHOST=$(HOST) -DPORT=$(PORT) -DUDP_PROTOCOL=$(UDP_PROTOCOL)
 DEFINES += -DCONNECTION_TIMEOUT=$(CONNECTION_TIMEOUT) -DFADE_OUT=$(FADE_OUT) -DSERVE_HISTOGRAM=$(SERVE_HISTOGRAM)
 DEFINES += -DFULLSCREEN_START=$(FULLSCREEN_START)
+DEFINES += -DRMT_ENABLED=$(PROFILING) #-DRMT_USE_OPENGL=1
 IP = $(shell ip addr | grep 'state UP' -A2 | tail -n1 | awk '{print $$2}' | cut -f1 -d'/')
 INFO = $(IP):$(PORT) $(PIXEL_WIDTH)x$(PIXEL_HEIGHT)
 
@@ -37,8 +39,8 @@ main_pi.o: main_pi.c
 
 
 
-LDFLAGS_SDL = `pkg-config --libs sdl2` -lm -lpthread -O3 -fsanitize=address -g -fno-omit-frame-pointer
-CFLAGS_SDL = -Wall -Wextra -Werror -pedantic -std=c11 -c `pkg-config --cflags sdl2` -Wall -O3 -fsanitize=address -g -fno-omit-frame-pointer
+LDFLAGS_SDL = `pkg-config --libs sdl2` -lm -ldl -lGL -lpthread -O3 -fsanitize=address -g -fno-omit-frame-pointer
+CFLAGS_SDL = -isystem "Remotery/lib/" -Wall -Wextra -Werror -pedantic -std=c11 -c `pkg-config --cflags sdl2` -O3 -fsanitize=address -g -fno-omit-frame-pointer
 
 sdl: $(EXE_SDL)
 

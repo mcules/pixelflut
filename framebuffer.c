@@ -36,6 +36,7 @@ static void framebuffer_free(framebuffer_t *framebuffer)
 
 static void framebuffer_fade_out(framebuffer_t *framebuffer)
 {
+	rmt_BeginCPUSample(framebuffer_fade_out, 0);
 	uint8_t *pixel = framebuffer->pixels;
 	for (uint32_t i = 0; i < framebuffer->width * framebuffer->height; i++)
 	{
@@ -44,6 +45,7 @@ static void framebuffer_fade_out(framebuffer_t *framebuffer)
 		pixel[2] = pixel[2] ? pixel[2] - 1 : pixel[2];
 		pixel += framebuffer->bytesPerPixel;
 	}
+	rmt_EndCPUSample();
 }
 
 static void framebuffer_draw_rect(
@@ -51,6 +53,7 @@ static void framebuffer_draw_rect(
 	int x, int y, int w, int h,
 	uint8_t r, uint8_t g, uint8_t b, uint8_t a)
 {
+	rmt_BeginCPUSample(framebuffer_draw_rect, 0);
 	uint32_t na = 255 - a;
 	uint32_t ar = a * (uint32_t)r;
 	uint32_t ag = a * (uint32_t)g;
@@ -66,12 +69,14 @@ static void framebuffer_draw_rect(
 			p += framebuffer->bytesPerPixel;
 		}
 	}
+	rmt_EndCPUSample();
 }
 
 static void framebuffer_measure_text(
 	framebuffer_t *framebuffer,
 	char *text, int size, int *w, int *h)
 {
+	rmt_BeginCPUSample(framebuffer_measure_text, 0);
 	float scale = stbtt_ScaleForPixelHeight(&framebuffer->font, size);
 	int ascent, descent;
 	stbtt_GetFontVMetrics(&framebuffer->font, &ascent, &descent, 0);
@@ -87,6 +92,7 @@ static void framebuffer_measure_text(
 	}
 	*w = xpos + 2;
 	*h = (int)ceilf(scale * (ascent - descent));
+	rmt_EndCPUSample();
 }
 
 static void framebuffer_write_text(
@@ -94,6 +100,7 @@ static void framebuffer_write_text(
 	int x, int y, char *text, int size,
 	uint8_t r, uint8_t g, uint8_t b)
 {
+	rmt_BeginCPUSample(framebuffer_write_text, 0);
 	int screen_w = strlen(text) * size + 10;
 	int screen_h = size + 10;
 	uint8_t *screen = alloca(screen_w * screen_h);
@@ -133,6 +140,7 @@ static void framebuffer_write_text(
 			p += framebuffer->bytesPerPixel;
 		}
 	}
+	rmt_EndCPUSample();
 }
 
 static void framebuffer_write_text_with_background(
@@ -141,8 +149,10 @@ static void framebuffer_write_text_with_background(
 	uint8_t r, uint8_t g, uint8_t b,
 	uint8_t br, uint8_t bg, uint8_t bb, uint8_t ba)
 {
+	rmt_BeginCPUSample(framebuffer_write_text_with_background, 0);
 	int w, h;
 	framebuffer_measure_text(framebuffer, text, size, &w, &h);
 	framebuffer_draw_rect(framebuffer, x, y, w, h, br, bg, bb, ba);
 	framebuffer_write_text(framebuffer, x, y, text, size, r, g, b);
+	rmt_EndCPUSample();
 }

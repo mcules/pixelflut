@@ -63,10 +63,20 @@ int main()
 			text_color[0], text_color[1], text_color[2],
 			text_bgcolor[0], text_bgcolor[1], text_bgcolor[2], text_bgcolor[3]);
 		
+		rmt_BeginCPUSample(sdl_update_texture, 0);
 		SDL_UpdateTexture(sdlTexture, NULL, server->framebuffer.pixels,
 			server->framebuffer.width * server->framebuffer.bytesPerPixel);
+		rmt_EndCPUSample();
+		
+		rmt_BeginCPUSample(sdl_render_copy, 0);
 		SDL_RenderCopy(renderer, sdlTexture, NULL, NULL);
+		rmt_EndCPUSample();
+		
+		rmt_BeginCPUSample(sdl_render_present, 0);
 		SDL_RenderPresent(renderer);
+		rmt_EndCPUSample();
+		
+		rmt_BeginCPUSample(sdl_poll_event, 0);
 		SDL_Event event;
 		if(SDL_PollEvent(&event))
 		{
@@ -89,7 +99,9 @@ int main()
 				}
 			}
 		}
+		rmt_EndCPUSample();
 	}
+	rmt_EndCPUSample();
 
 	server_stop(server);
 	free(server);

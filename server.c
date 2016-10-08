@@ -13,6 +13,8 @@
 #include <stdatomic.h>
 #include <time.h>
 
+#define asm __asm__
+#include "Remotery.c"
 #include "framebuffer.c"
 #include "histogram.c"
 
@@ -62,12 +64,15 @@ struct server_t
 	atomic_uint connection_current;
 	atomic_uint pixels_per_second_counter;
 	atomic_uint_fast64_t total_pixels_received;
+	
+	Remotery *remotery;
 };
 
 #include "commandhandler.c"
 
 static void server_client_disconnect(client_connection_t *client)
 {
+	rmt_BeginCPUSample(server_client_disconnect, 0);
 	int socket = client->socket;
 	client->socket = 0;
 	client->offset_x = 0;
@@ -76,10 +81,13 @@ static void server_client_disconnect(client_connection_t *client)
 	close(socket);
 	atomic_fetch_add(&client->server->connection_count, -1);
 	//printf("Client disconnected\n");
+	rmt_EndCPUSample();
 }
 
 static void server_poll_client_connection(client_connection_t *client)
 {
+	rmt_BeginCPUSample(server_poll_client_connection, 0);
+
 	// TODO: disconnect on timeout does not work with nonblocking recv!?
 	int read_size;
 	if((read_size = recv(client->socket, client->buffer + client->buffer_used, sizeof(client->buffer) - client->buffer_used , MSG_DONTWAIT)) > 0)
@@ -98,6 +106,7 @@ static void server_poll_client_connection(client_connection_t *client)
 				{
 					//printf("server closed connection\n");
 					server_client_disconnect(client);
+					rmt_EndCPUSample();
 					return;
 				}
 				start = end + 1;
@@ -124,17 +133,20 @@ static void server_poll_client_connection(client_connection_t *client)
 	{
 		fprintf(stderr, "client recv error: %d on socket %d\n", errno, client->socket);
 	}
+	rmt_EndCPUSample();
 }
 
 static void *server_client_thread(void *param)
 {
 	server_t *server = (server_t*)param;
+	rmt_SetCurrentThreadName("client thread");
 	while(server->running || server->connection_count)
 	{
 		unsigned int index = server->connection_current;
 		while (!atomic_compare_exchange_weak(&server->connection_current, &index, index + 1))
 			index = server->connection_current;
 		
+		rmt_BeginCPUSample(handle_client, 0);
 		client_connection_t *client = server->connections + index % MAX_CONNECTIONS;
 		if (!atomic_flag_test_and_set(&client->lock))
 		{
@@ -147,6 +159,7 @@ static void *server_client_thread(void *param)
 			}
 			atomic_flag_clear(&client->lock);
 		}
+		rmt_EndCPUSample();
 	}
 	return 0;
 }
@@ -158,6 +171,7 @@ static void *server_listen_thread(void *param)
 	addr_len = sizeof(addr);
 	struct timeval tv;
 
+	//rmt_SetCurrentThreadName("listen thread");
 	printf("Starting Server...\n");
 
 	server_t *server = (server_t*)param;
@@ -200,6 +214,8 @@ static void *server_listen_thread(void *param)
 	setsockopt(server->socket, SOL_SOCKET, SO_SNDTIMEO, (char *)&tv, sizeof(struct timeval));
 	setsockopt(server->socket, SOL_SOCKET, SO_RCVTIMEO, (char *)&tv, sizeof(struct timeval));
 
+	//rmt_BeginCPUSample(starting_to_accept, 0);
+
 	while (server->running)
 	{
 		for (int i = 0; i < MAX_CONNECTIONS && server->running; i++)
@@ -208,7 +224,9 @@ static void *server_listen_thread(void *param)
 			{
 				client_connection_t *client = server->connections + i;
 				client->server = server;
+				//rmt_EndCPUSample();
 				int client_socket = accept(server->socket, (struct sockaddr*)&addr, &addr_len);
+				//rmt_BeginCPUSample(client_accepted, 0);
 				if (client_socket > 0)
 				{
 					client->socket = client_socket;
@@ -218,6 +236,7 @@ static void *server_listen_thread(void *param)
 			}
 		}
 	}
+	//rmt_EndCPUSample();
 	close(server->socket);
 	
 	printf("Ended listenting.\n");
@@ -240,6 +259,10 @@ static int server_start(
 	server->frame = 0;
 	
 	assert(fade_interval > 0);
+	
+	rmt_CreateGlobalInstance(&server->remotery);
+	//rmt_BindOpenGL();
+	rmt_SetCurrentThreadName("render thread");
 
 	framebuffer_init(&server->framebuffer, width, height, bytesPerPixel);
 	
@@ -266,6 +289,9 @@ static int server_start(
 
 static void server_stop(server_t *server)
 {
+	//rmt_UnbindOpenGL();
+	rmt_DestroyGlobalInstance(server->remotery);
+
 	server->running = 0;
 	close(server->socket);
 
@@ -291,6 +317,8 @@ static void server_stop(server_t *server)
 
 static void server_update(server_t *server)
 {
+	rmt_BeginCPUSample(server_update, 0);
+	
 	if (server->frame % server->fade_interval == 0)
 	{
 		if (server->flags & SERVER_FADE_OUT_ENABLED)
@@ -312,4 +340,5 @@ static void server_update(server_t *server)
 	}
 
 	server->frame++;
+	rmt_EndCPUSample();
 }

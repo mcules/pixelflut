@@ -36,7 +36,9 @@ static void histogram_free(histogram_t *histogram)
 
 static void histogram_update(histogram_t *histogram)
 {
+	rmt_BeginCPUSample(histogram_update, 0);
 	uint32_t *buckets = histogram->buckets[0][0];
 	for (int i = 0; i < 8 * 8 * 8; i++)
 		buckets[i] *= 0.99;
+	rmt_EndCPUSample();
 }
