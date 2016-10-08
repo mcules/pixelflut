@@ -94,6 +94,7 @@ static void server_poll_client_connection(client_connection_t *client)
 	rmt_EndCPUSample();
 	if(read_size > 0)
 	{
+		rmt_BeginCPUSample(cmd_handler, 0);
 		client->buffer_used += read_size;
 
 		char *start, *end;
@@ -103,11 +104,10 @@ static void server_poll_client_connection(client_connection_t *client)
 			if (*end == '\n')
 			{
 				*end = 0;
-				rmt_BeginCPUSample(cmd_handler, 0);
 				command_status_t status = command_handler(client, start);
-				rmt_EndCPUSample();
 				if (status == COMMAND_CLOSE)
 				{
+					rmt_EndCPUSample();
 					//printf("server closed connection\n");
 					server_client_disconnect(client);
 					rmt_EndCPUSample();
@@ -117,6 +117,7 @@ static void server_poll_client_connection(client_connection_t *client)
 			}
 			end++;
 		}
+		rmt_EndCPUSample();
 
 		int offset = start - client->buffer;
 		int count = client->buffer_used - offset;
