@@ -194,6 +194,8 @@ int main(int argc, char **argv)
 		}
 	}
 
+	exit(0); // TODO: fix hang on shutdown that happens otherwise
+
 	server_stop(server);
 	free(server);
 

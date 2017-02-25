@@ -77,11 +77,9 @@ static void server_client_disconnect(client_connection_t *client)
 	//printf("client disconnected\n");
 }
 
-static void server_poll_client_connection(client_connection_t *client)
+static void server_poll_client_connection(client_connection_t *client, struct timespec *now)
 {
-	struct timespec time;
-	clock_gettime(CLOCK_MONOTONIC, &time);
-	if (time.tv_sec - client->last_msg_time.tv_sec >= client->server->timeout) // ignores the nsec for now...
+	if (now->tv_sec - client->last_msg_time.tv_sec >= client->server->timeout) // ignores the nsec for now...
 	{
 		printf("server closed connection after timeout\n");
 		server_client_disconnect(client);
@@ -140,8 +138,20 @@ static void server_poll_client_connection(client_connection_t *client)
 static void *server_client_thread(void *param)
 {
 	server_t *server = (server_t*)param;
+
+	struct timespec now;
+	clock_gettime(CLOCK_MONOTONIC, &now);
+	int clockSkipCounter = 0;
+
 	while(server->running || server->connection_count)
 	{
+		// only update the current time once in a while to save cpu time
+		if (++clockSkipCounter > 1024)
+		{
+			clockSkipCounter = 0;
+			clock_gettime(CLOCK_MONOTONIC, &now);
+		}
+
 		unsigned int index = server->connection_current;
 		while (!atomic_compare_exchange_weak(&server->connection_current, &index, index + 1))
 			index = server->connection_current;
@@ -152,7 +162,7 @@ static void *server_client_thread(void *param)
 			if (client->socket)
 			{
 				if (server->running)
-					server_poll_client_connection(client);
+					server_poll_client_connection(client, &now);
 				else
 					server_client_disconnect(client);
 			}
