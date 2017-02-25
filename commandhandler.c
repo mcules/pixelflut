@@ -63,7 +63,7 @@ static command_status_t command_handler(client_connection_t *client, char *cmd)
 		if ((uint32_t)x >= framebuffer->width || (uint32_t)y >= framebuffer->height)
 			return COMMAND_ERROR;
 		pos1 = ++pos2;
-		
+
 		uint32_t c = 0;
 		pos1 = pos2;
 		for (int i = 0; i < 8; i++)
@@ -72,7 +72,7 @@ static command_status_t command_handler(client_connection_t *client, char *cmd)
 				c = c << 4 | (*pos1 - '0');
 			else if (*pos1 >= 'a' && *pos1 <= 'f')
 				c = c << 4 | (*pos1 - 'a' + 10);
-			else if (*pos1 >= 'A' && *pos1 <= 'A')
+			else if (*pos1 >= 'A' && *pos1 <= 'F')
 				c = c << 4 | (*pos1 - 'A' + 10);
 			else
 				break;
@@ -80,9 +80,10 @@ static command_status_t command_handler(client_connection_t *client, char *cmd)
 		}
 		if (pos2 == pos1) // no color specified -> color request
 		{
-			char colorout[30]; // TODO: fix pixel addr/write
-			snprintf(colorout, sizeof(colorout), "PX %d %d %06x\n", x, y, framebuffer->pixels[y * framebuffer->width + x] & 0xffffff);
-			send(client->socket, colorout, sizeof(colorout) - 1, MSG_DONTWAIT | MSG_NOSIGNAL);
+			char colorout[30];
+			uint8_t *pixel = framebuffer->pixels + (y * framebuffer->width + x) * framebuffer->bytesPerPixel; // RGB(A)
+			snprintf(colorout, sizeof(colorout), "PX %d %d %02x%02x%02x\n", x, y, pixel[0], pixel[1], pixel[2]);
+			send(client->socket, colorout, strlen(colorout), MSG_DONTWAIT | MSG_NOSIGNAL);
 			return COMMAND_SUCCESS;
 		}
 
