@@ -20,7 +20,7 @@ main_pi.o: main_pi.c
 
 
 LDFLAGS_SDL = `pkg-config --libs sdl2` -lm -ldl -lGL -lpthread -O3 -flto -fomit-frame-pointer
-CFLAGS_SDL = -Wall -Wextra -Werror -pedantic -std=c11 -c `pkg-config --cflags sdl2` -O3 -march=native -fomit-frame-pointer
+CFLAGS_SDL = -Wall -Wextra -Werror -pedantic -std=c11 -c `pkg-config --cflags sdl2` -O3 -flto -march=native -fomit-frame-pointer
 
 sdl: $(EXE_SDL)
 
