@@ -17,7 +17,9 @@ int main(int argc, char **argv)
 	int fade_out = 0;
 	int fade_interval = 4;
 	int show_text = 1;
-	
+	char ip_is[256] = "127.0.0.1";
+
+
 	for (int i = 1; i < argc; i++)
 	{
 		if (BEGINS_WITH(argv[i], "--help"))
@@ -35,6 +37,7 @@ int main(int argc, char **argv)
 			OPTION("--fade_out", "\t\tEnable fading out the framebuffer contents.");
 			OPTION("--fade_interval <frames>", "Interval for fading out the framebuffer as number of displayed frames. Default: 4.");
 			OPTION("--hide_text", "\t\tHide the overlay text.");
+			OPTION("--ip <IP>", "\t\tShow specific IP instead of hostname.");
 			return 0;
 		}
 		else if (BEGINS_WITH(argv[i], "--width") && i + 1 < argc)
@@ -59,6 +62,8 @@ int main(int argc, char **argv)
 			fade_interval = strtol(argv[++i], 0, 10);
 		else if (BEGINS_WITH(argv[i], "--hide_text"))
 			show_text = 0;
+		else if (BEGINS_WITH(argv[i], "--ip"))
+			strcpy(ip_is,argv[++i]);
 		else
 		{
 			printf("unknown option \"%s\"\n", argv[i]);
@@ -115,7 +120,7 @@ int main(int argc, char **argv)
 		SDL_Quit();
 		return 1;
 	}
-	
+
 	server_t *server = calloc(1, sizeof(server_t));
 	server_flags_t flags = SERVER_NONE;
 	flags |= fade_out ? SERVER_FADE_OUT_ENABLED : 0;
@@ -127,7 +132,7 @@ int main(int argc, char **argv)
 		SDL_Quit();
 		return 1;
 	}
-	
+
 	char hostname[256] = "127.0.0.1";
 	char text_additional[256];
 	int text_position[2] = { 32, height - 64 };
@@ -137,7 +142,11 @@ int main(int argc, char **argv)
 
 	if (show_text)
 	{
-		gethostname(hostname, sizeof(hostname));
+		if (strcmp(ip_is,"127.0.0.1") == 0)
+			gethostname(hostname, sizeof(hostname));
+		else
+			strcpy(hostname,ip_is);
+
 		if (serve_histogram)
 			snprintf(text_additional, sizeof(text_additional), "http://%s:%d", hostname, port);
 		else
@@ -155,7 +164,7 @@ int main(int argc, char **argv)
 				text_position[0], text_position[1], text_additional, text_size,
 				text_color[0], text_color[1], text_color[2],
 				text_bgcolor[0], text_bgcolor[1], text_bgcolor[2], text_bgcolor[3]);
-			
+
 			char text[1024];
 			sprintf(text, "connections: %4u; pixels: %10" PRId64 "; p/s: %8u",
 				server->connection_count, server->total_pixels_received, server->pixels_received_per_second);
@@ -165,12 +174,12 @@ int main(int argc, char **argv)
 				text_color[0], text_color[1], text_color[2],
 				text_bgcolor[0], text_bgcolor[1], text_bgcolor[2], text_bgcolor[3]);
 		}
-		
+
 		SDL_UpdateTexture(sdlTexture, NULL, server->framebuffer.pixels,
 			server->framebuffer.width * server->framebuffer.bytesPerPixel);
 		SDL_RenderCopy(renderer, sdlTexture, NULL, NULL);
 		SDL_RenderPresent(renderer);
-		
+
 		SDL_Event event;
 		if(SDL_PollEvent(&event))
 		{
