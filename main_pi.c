@@ -195,7 +195,7 @@ int main(int argc, char *argv[])
 
 	// initial opengl state
 	glViewport(0, 0, width, height);
-	
+
 	// texture
 	GLuint texture;
 	glGenTextures(1, &texture);
@@ -205,14 +205,14 @@ int main(int argc, char *argv[])
 	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-	
+
 	bytesPerPixel = 3;
 
 	// load program
 	GLuint programObject = LoadProgram(vertex_shader, fragment_shader);
 	glUseProgram(programObject);
 	glUniform1i(glGetUniformLocation(programObject, "tex"), 0);
-	
+
 	// load quad data
 	glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, quad_vertices);
 	glEnableVertexAttribArray(0);
@@ -221,7 +221,7 @@ int main(int argc, char *argv[])
 
 	if (!server_start())
 		return 1;
-	
+
 	while(!kbhit())
 	{
 		update_pixels();
