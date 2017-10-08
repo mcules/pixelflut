@@ -93,8 +93,8 @@
 
 			function resize()
 			{
-				gl.viewportWidth = canvas.width;
-				gl.viewportHeight = canvas.height;
+				gl.viewportWidth = canvas.width = window.innerHeight*0.70;
+				gl.viewportHeight = canvas.height = window.innerHeight*0.70;
 				gl.viewport(0, 0, gl.viewportWidth, gl.viewportHeight);
 			}
 
@@ -181,7 +181,9 @@
 	<body onload="showdata();" style="background:black;color:white;font-family:monospace;">
 		<h1>ohai to pixelflut!</h1>
 		Real-time usage of the RGB color space quantized to eight sections on each axis:<br>
+		
 		<canvas id="datacanvas" width="512" height="512" style="border: none;"></canvas><br>
+
 		<h2>how to flut</h2>
 		Connect via TCP to this address/port and use the following commandz:
 		<ul>

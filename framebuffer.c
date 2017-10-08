@@ -24,7 +24,7 @@ static void framebuffer_init(framebuffer_t *framebuffer, int width, int height, 
 		exit(1);
 	}
 	fclose(file);
-	
+
 	stbtt_InitFont(&framebuffer->font, framebuffer->ttf_buffer, stbtt_GetFontOffsetForIndex(framebuffer->ttf_buffer, 0));
 }
 
@@ -116,7 +116,7 @@ static void framebuffer_write_text(
 			xpos += scale * stbtt_GetCodepointKernAdvance(&framebuffer->font, text[0], text[1]);
 		text++;
 	}
-	
+
 	for (int cy = y; cy < y + screen_h; cy++)
 	{
 		uint8_t *p = framebuffer->pixels + (cy * framebuffer->width + x) * framebuffer->bytesPerPixel;

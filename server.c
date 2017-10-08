@@ -47,12 +47,12 @@ struct server_t
 	int threads;
 	server_flags_t flags;
 	int fade_interval;
-	
+
 	volatile int running;
 	int frame;
 	uint32_t pixels_received_per_second;
 	struct timespec prev_second;
-	
+
 	pthread_t listen_thread;
 	pthread_t *client_threads;
 	client_connection_t *connections;
@@ -155,7 +155,7 @@ static void *server_client_thread(void *param)
 		unsigned int index = server->connection_current;
 		while (!atomic_compare_exchange_weak(&server->connection_current, &index, index + 1))
 			index = server->connection_current;
-		
+
 		client_connection_t *client = server->connections + index % server->connection_capacity;
 		if (!atomic_flag_test_and_set(&client->lock))
 		{
@@ -241,7 +241,7 @@ static void *server_listen_thread(void *param)
 		}
 	}
 	close(server->socket);
-	
+
 	printf("Ended listenting.\n");
 	return 0;
 }
@@ -267,11 +267,11 @@ static int server_start(
 		return 0;
 	}
 	server->connection_capacity = max_connections;
-	
+
 	assert(fade_interval > 0);
 
 	framebuffer_init(&server->framebuffer, width, height, bytesPerPixel);
-	
+
 	if (flags & SERVER_HISTOGRAM_ENABLED)
 		histogram_init(&server->histogram);
 
@@ -283,7 +283,7 @@ static int server_start(
 		framebuffer_free(&server->framebuffer);
 		return 0;
 	}
-	
+
 	server->client_threads = calloc(threads, sizeof(pthread_t));
 	for (int i = 0; i < threads; i++)
 		if (pthread_create(&server->client_threads[i], NULL, server_client_thread, server) < 0)
@@ -330,7 +330,7 @@ static void server_update(server_t *server)
 		if (server->flags & SERVER_HISTOGRAM_ENABLED)
 			histogram_update(&server->histogram);
 	}
-	
+
 	struct timespec time;
 	clock_gettime(CLOCK_MONOTONIC, &time);
 	float delta = (float)((double)(time.tv_sec - server->prev_second.tv_sec) + 0.000000001 * (double)(time.tv_nsec - server->prev_second.tv_nsec));
