@@ -60,7 +60,7 @@ DISPLAY=:0.1 ./pixel_sdl --connections_max 1000 --threads 4 --fullscreen
 - If you duplicate the main display the main display will be ":0.0" and the Projector ":1.0".
 - If you have only one display it will be ":0.0".
 
-# Display driver
+## Display driver
 Sometimes the free NVidia driver has problems on multiple displays. So install the proprietary driver:
 1. detect the chip and find the right driver:
 ```
