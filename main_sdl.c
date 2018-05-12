@@ -177,8 +177,8 @@ int main(int argc, char **argv)
 				text_bgcolor[0], text_bgcolor[1], text_bgcolor[2], text_bgcolor[3]);
 
 			char text[1024];
-			sprintf(text, "connections: %4u; pixels: %10" PRId64 "; p/s: %8u",
-				server->connection_count, server->total_pixels_received, server->pixels_received_per_second);
+			sprintf(text, "connections: %4u; Megapixels: %10" PRId64 "; p/s: %8u",
+				server->connection_count, server->total_pixels_received/1000000, server->pixels_received_per_second);
 			framebuffer_write_text_with_background(
 				&server->framebuffer,
 				text_position[0], text_position[1] + text_size, text, text_size,
