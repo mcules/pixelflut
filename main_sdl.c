@@ -15,9 +15,9 @@ int main(int argc, char **argv)
 	uint16_t port = 1234;
 	int connection_timeout = 5;
 	int connections_max = 1000;
-	int threads = 3;
+	int threads = 4;
 	int serve_histogram = 1;
-	int start_fullscreen = 0;
+	int start_fullscreen = 1;
 	int fade_out = 0;
 	int fade_interval = 4;
 	int show_text = 1;
@@ -36,9 +36,9 @@ int main(int argc, char **argv)
 			OPTION("--port <port>", "\t\tTCP port. Default: 1234.");
 			OPTION("--connection_timeout <seconds>", "Connection timeout on idle. Default: 5s.");
 			OPTION("--connections_max <n>", "\tMaximum number of open connections. Default: 1000.");
-			OPTION("--threads <n>", "\t\tNumber of connection handler threads. Default: 3.");
+			OPTION("--threads <n>", "\t\tNumber of connection handler threads. Default: 4.");
 			OPTION("--no-histogram", "\t\tDisable calculating and serving the histogram over HTTP.");
-			OPTION("--fullscreen", "\t\tStart in fullscreen mode.");
+			OPTION("--window", "\t\tStart in window mode.");
 			OPTION("--fade_out", "\t\tEnable fading out the framebuffer contents.");
 			OPTION("--fade_interval <frames>", "Interval for fading out the framebuffer as number of displayed frames. Default: 4.");
 			OPTION("--hide_text", "\t\tHide the overlay text.");
@@ -60,8 +60,8 @@ int main(int argc, char **argv)
 			threads = strtol(argv[++i], 0, 10);
 		else if (BEGINS_WITH(argv[i], "--no-histogram"))
 			serve_histogram = 0;
-		else if (BEGINS_WITH(argv[i], "--fullscreen"))
-			start_fullscreen = 1;
+		else if (BEGINS_WITH(argv[i], "--window"))
+			start_fullscreen = 0;
 		else if (BEGINS_WITH(argv[i], "--fade_out"))
 			fade_out = 1;
 		else if (BEGINS_WITH(argv[i], "--fade_interval") && i + 1 < argc)
@@ -87,7 +87,7 @@ int main(int argc, char **argv)
 		SDL_DisplayMode mode;
 		if (SDL_GetCurrentDisplayMode(0, &mode))
 		{
-			printf("could not retrieve display mode\n");
+			printf("could not retrieve display mode (hint 1: run as root; hint 2: specify the correct xServer: 'DISPLAY=:0.0 ./pixel_sdl')\n");
 			SDL_Quit();
 			return 1;
 		}
