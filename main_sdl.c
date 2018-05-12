@@ -43,7 +43,7 @@ int main(int argc, char **argv)
 			OPTION("--fade_interval <frames>", "Interval for fading out the framebuffer as number of displayed frames. Default: 4.");
 			OPTION("--hide_text", "\t\tHide the overlay text.");
 			OPTION("--show_ip_instead_of_hostname", "Show IPv4 of interface with default-gateway on overlay.");
-			OPTION("--ip <IP>", "\t\tShow specific IP instead of hostname.");
+			OPTION("--show_custom_ip <IP>", "\tShow specific IP instead of hostname.");
 			return 0;
 		}
 		else if (BEGINS_WITH(argv[i], "--width") && i + 1 < argc)
@@ -70,7 +70,7 @@ int main(int argc, char **argv)
 			show_text = 0;
 		else if (BEGINS_WITH(argv[i], "--show_ip_instead_of_hostname"))
 			show_ip_instead_of_hostname = 1;
-		else if (BEGINS_WITH(argv[i], "--ip"))
+		else if (BEGINS_WITH(argv[i], "--show_custom_ip"))
 			strcpy(custom_ip_adress,argv[++i]);
 		else
 		{
