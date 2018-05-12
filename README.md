@@ -52,7 +52,7 @@ iptables-restore < iptables.save
 start x server first, then the pixelflut server:
 ```
 startx &  # start in background
-./pixel_sdl --connections_max 1000 --threads 4 --fullscreen
+./pixel_sdl
 ```
 
 ## Stop Server
@@ -61,7 +61,7 @@ Press q or Ctrl+c
 ## Multiple screens
 If you need the output to be displayed on a second screen (projector), you have to tell it which display to use, e.g.:
 ```
-DISPLAY=:0.1 ./pixel_sdl --connections_max 1000 --threads 4 --fullscreen
+DISPLAY=:0.1 ./pixel_sdl
 ```
 - If you expand the main display, the main display will be ":0.0" and the projector ":0.1".
 - If you duplicate the main display, the main display will be ":0.0" and the projector ":1.0".
