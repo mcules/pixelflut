@@ -1,4 +1,4 @@
-#include "common.c"
+#include "pi_stuff.c"
 #include <termios.h>
 #include <fcntl.h>
 #include "bcm_host.h"
