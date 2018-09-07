@@ -1,4 +1,4 @@
-# Pixel
+# Pixelflut
 Fast pixelflut server written in C. It is a collaborative coding game. See https://cccgoe.de/wiki/Pixelflut for details about the game itself. In short: project the pixelflut server output onto a wall where many people can see it. Connected clients can then set single pixels by sending a string like "PX [x] [y] [color]\n" (e.g. "PX 100 300 00FF12\n") to its TCP socket. Use netcat, python or whatever you want.
 
 ## Hardware requirements
@@ -22,10 +22,10 @@ On a clean Debian installation with the "SSH server" and "standard system utilit
 ```
 apt update
 apt install xorg git build-essential pkg-config libsdl2-dev -y
-git clone https://github.com/larsmm/pixel.git
-cd pixel
-make sdl # Use "make pi" here to build the Raspberry Pi version (not actively maintained)
-./pixel_sdl --help
+git clone https://github.com/larsmm/pixelflut.git
+cd pixelflut
+make
+./pixelflut --help
 ```
 
 ## Connection limit
@@ -52,7 +52,7 @@ iptables-restore < iptables.save
 start x server first, then the pixelflut server:
 ```
 startx &  # start in background
-./pixel_sdl
+./pixelflut
 ```
 
 ## Stop Server
@@ -61,7 +61,7 @@ Press q or Ctrl+c
 ## Multiple screens
 If you need the output to be displayed on a second screen (projector), you have to tell it which display to use, e.g.:
 ```
-DISPLAY=:0.1 ./pixel_sdl
+DISPLAY=:0.1 ./pixelflut
 ```
 - If you expand the main display, the main display will be ":0.0" and the projector ":0.1".
 - If you duplicate the main display, the main display will be ":0.0" and the projector ":1.0".
@@ -94,3 +94,4 @@ systemctl mask sleep.target suspend.target hibernate.target hybrid-sleep.target
 
 ## TODO
 - Use epoll() to check multiple sockets for I/O events at once
+- better network-statistics
