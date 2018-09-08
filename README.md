@@ -63,15 +63,19 @@ If you need the output to be displayed on a second screen (projector), you have 
 ```
 DISPLAY=:0.1 ./pixelflut
 ```
-- If you expand the main display, the main display will be ":0.0" and the projector ":0.1".
+- If you expand the main display, the main display will be ":0.0" or ":0" and the projector ":0.1".
 - If you duplicate the main display, the main display will be ":0.0" and the projector ":1.0".
-- If you have only one display, it will be ":0.0".
+- If you have only one display, it will be ":0.0" or ":0".
 
 ## Display driver
 Sometimes the free NVidia driver has problems on multiple displays. So install the proprietary driver:
 1. detect the chip and find the right driver:
 ```
-apt install nvidia-detect nvidia-xconfig
+nano /etc/sources/sources.list
+```
+Add: "contrib non-free" after each source
+```
+apt install nvidia-detect
 nvidia-detect
 ```
 2. install driver:
@@ -81,10 +85,17 @@ reboot
 ```
 3. configure your displays:
 ```
-nvidia-settings
-nvidia-xconfig
+startx
 ```
-restart x server
+run the following inside the x-session and setup your displays:
+```
+nvidia-settings
+```
+or via SSH:
+```
+DISPLAY=:0 nvidia-settings
+```
+maybe restart x server
 
 ## Prevent standby
 If you are using a notebook and want to close the lit. To disable all standby stuff:
