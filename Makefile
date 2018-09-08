@@ -25,10 +25,10 @@ CFLAGS_SDL = -Wall -Wextra -Werror -pedantic -std=c11 -c `pkg-config --cflags sd
 # sdl: $(EXE_SDL)
 all: $(EXE_SDL)
 
-$(EXE_SDL): main_sdl.o
-	$(CC) -o $@ main_sdl.o $(LDFLAGS_SDL)
+$(EXE_SDL): main.o
+	$(CC) -o $@ main.o $(LDFLAGS_SDL)
 
-main_sdl.o: main_sdl.c
+main.o: main.c
 	$(CC) $(CFLAGS_SDL) $< -o $@
 
 
