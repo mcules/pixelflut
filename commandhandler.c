@@ -141,6 +141,13 @@ static command_status_t command_handler(client_connection_t *client, char *cmd)
 		send(client->socket, out, l, MSG_DONTWAIT | MSG_NOSIGNAL);
 		return COMMAND_SUCCESS;
 	}
+	else if(!strncmp(cmd, "STATUS", 6))
+	{
+		char out[64];
+		int l = sprintf(out, "{con:%d,mp:%d,ps:%d}\n", server->connection_count, server->total_pixels_received/1000000, server->pixels_received_per_second);
+		send(client->socket, out, l, MSG_DONTWAIT | MSG_NOSIGNAL);
+		return COMMAND_SUCCESS;
+	}
 	else if(!strncmp(cmd, "HELP", 4))
 	{
 		static const char out[] =
